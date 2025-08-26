@@ -6,7 +6,7 @@ def names(String suffix = 'test') {
     if (jobName.contains('/')) {
         def jobNames = jobName.split('/')
 
-        jobName = jobNames[job_names.size() - 1]
+        jobName = jobNames[jobNames.size() - 1]
     }
 
     def containerName = "${jobName}${buildNumber}_test"
