@@ -131,3 +131,40 @@ pipeline {
     }
 }
 ```
+
+## Contributing and Testing Changes
+When you need to add a new function or fix a bug in this shared library, you can test your changes in a real pipeline before merging them. The process involves pointing your project's Jenkinsfile to your specific pull request.
+
+An example workflow:
+
+1. **Develop Your Changes**
+
+Create a new branch in this repository and add your new functions or make your modifications.
+
+2. **Push and Create a Pull Request**
+
+Push your branch to the repository and open a pull request. Take note of the PR number. For this example, let's assume your PR number is _1052_.
+
+3. **Test in a Downstream Pipeline**
+
+In the Jenkinsfile of the project where you want to test your changes, modify the library import to pull the code directly from your PR.
+
+Change the standard library import:
+
+``` groovy
+// Before: Using the default version
+library('qa-jenkins-library') _
+```
+
+To the pull request import:
+
+``` groovy
+// After: Testing PR #1052
+library('qa-jenkins-library@pull/1052/head') _
+
+node {
+    // ... your pipeline stages
+}
+```
+
+Now, when you run this pipeline, it will use the code from your pull request instead of the default branch, allowing you to validate your changes in a real-world scenario. 
