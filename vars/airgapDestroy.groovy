@@ -43,6 +43,10 @@ class AirgapDestroyPipeline implements Serializable {
     void checkoutRepositories() {
         ensureState()
         logInfo('Checking out repositories')
+        def testsRepoBranch = this.@state.RANCHER_TEST_REPO_BRANCH ?: 'main'
+        def testsRepoUrl = this.@state.RANCHER_TEST_REPO_URL ?: PipelineDefaults.DEFAULT_RANCHER_TEST_REPO
+        def infraRepoBranch = this.@state.QA_INFRA_REPO_BRANCH ?: 'main'
+        def infraRepoUrl = this.@state.QA_INFRA_REPO_URL ?: PipelineDefaults.DEFAULT_QA_INFRA_REPO
         def checkoutExtensions = [
             [$class: 'CleanCheckout'],
             [$class: 'CloneOption', depth: 1, shallow: true]
@@ -51,18 +55,18 @@ class AirgapDestroyPipeline implements Serializable {
         steps.dir('./tests') {
             steps.checkout([
                 $class: 'GitSCM',
-                branches: [[name: "*/${state.RANCHER_TEST_REPO_BRANCH ?: 'main'}"]],
+                branches: [[name: "*/${testsRepoBranch}"]],
                 extensions: checkoutExtensions,
-                userRemoteConfigs: [[url: state.RANCHER_TEST_REPO_URL ?: PipelineDefaults.DEFAULT_RANCHER_TEST_REPO]]
+                userRemoteConfigs: [[url: testsRepoUrl]]
             ])
         }
 
         steps.dir('./qa-infra-automation') {
             steps.checkout([
                 $class: 'GitSCM',
-                branches: [[name: "*/${state.QA_INFRA_REPO_BRANCH ?: 'main'}"]],
+                branches: [[name: "*/${infraRepoBranch}"]],
                 extensions: checkoutExtensions,
-                userRemoteConfigs: [[url: state.QA_INFRA_REPO_URL ?: PipelineDefaults.DEFAULT_QA_INFRA_REPO]]
+                userRemoteConfigs: [[url: infraRepoUrl]]
             ])
         }
     }
@@ -206,43 +210,4 @@ docker run --rm \\
     -e AWS_DEFAULT_REGION=\"${state.S3_BUCKET_REGION}\" \\
     amazon/aws-cli:latest \\
     sh -c 'set -euo pipefail
-    if aws s3 ls "s3://${bucket}/env:/${workspace}/" --region "${region}" 2>/dev/null; then
-        echo "Workspace directory found: s3://${bucket}/env:/${workspace}/"
-        aws s3 ls "s3://${bucket}/env:/${workspace}/" --recursive --region "${region}" || true
-        aws s3 rm "s3://${bucket}/env:/${workspace}/" --recursive --region "${region}"
-        if aws s3 ls "s3://${bucket}/env:/${workspace}/" --region "${region}" 2>/dev/null; then
-        echo "ERROR: Failed to delete workspace directory" >&2
-        exit 1
-    else
-            echo "[OK] Successfully deleted workspace directory: s3://${bucket}/env:/${workspace}/"
-    fi
-else
-    echo "[INFO] Workspace directory does not exist in S3 - nothing to clean up"
-fi'
-"""
-            steps.sh(label: 'Cleanup S3 workspace directory', script: script)
-            }
-    }
-
-    private void logInfo(String msg) {
-        steps.echo "${PipelineDefaults.LOG_PREFIX_INFO} ${timestamp()} ${msg}"
-    }
-
-    private List defaultCredentialBindings() {
-        [
-            steps.string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
-            steps.string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY'),
-            steps.string(credentialsId: 'AWS_SSH_PEM_KEY', variable: 'AWS_SSH_PEM_KEY'),
-            steps.string(credentialsId: 'AWS_SSH_KEY_NAME', variable: 'AWS_SSH_KEY_NAME')
-        ]
-    }
-
-    private static String timestamp() {
-        new Date().format('yyyy-MM-dd HH:mm:ss')
-    }
-
-}
-
-def pipeline(def steps = this) {
-    new AirgapDestroyPipeline(steps)
-}
+    if aws s3 ls "s3://${bucket}/env:/${workspace}/" --region "${region}" 2>/divers
