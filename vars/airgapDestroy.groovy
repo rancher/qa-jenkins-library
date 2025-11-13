@@ -73,7 +73,7 @@ class AirgapDestroyPipeline implements Serializable {
 
     void destroyInfrastructure() {
         ensureState()
-        if (!state.CONTAINER_PREPARED) {
+        if (!this.@state.CONTAINER_PREPARED) {
             prepareContainerResources()
         }
         validationManager.ensureRequiredVariables(state, ['QA_INFRA_WORK_PATH', 'TERRAFORM_VARS_FILENAME', 'ENV_FILE'])
@@ -82,21 +82,23 @@ class AirgapDestroyPipeline implements Serializable {
 
     void prepareContainerResources() {
         ensureState()
-        if (state.CONTAINER_PREPARED) {
+        if (this.@state.CONTAINER_PREPARED) {
             logInfo('Container resources already prepared; skipping rebuild')
             return
         }
 
         logInfo('Preparing container resources for destroy workflow')
-        dockerManager.buildImage(state.IMAGE_NAME)
-        dockerManager.createSharedVolume(state.VALIDATION_VOLUME)
+        def imageName = this.@state.IMAGE_NAME
+        def volumeName = this.@state.VALIDATION_VOLUME
+        dockerManager.buildImage(imageName)
+        dockerManager.createSharedVolume(volumeName)
 
         steps.withCredentials(defaultCredentialBindings()) {
-            envManager.ensureDestroySshKeys(state)
-            dockerManager.stageSshKeys(state.VALIDATION_VOLUME)
+            envManager.ensureDestroySshKeys(this.@state)
+            dockerManager.stageSshKeys(volumeName)
         }
 
-        state.CONTAINER_PREPARED = true
+        this.@state.CONTAINER_PREPARED = true
         logInfo('Container resources ready')
     }
 
