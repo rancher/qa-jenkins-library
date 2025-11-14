@@ -497,8 +497,9 @@ perform_cleanup \"${reason}\" \"${state.TF_WORKSPACE}\" \"true\"
     }
 
     private void syncEnvFromContext(List<String> keys) {
+        // Use explicit this.state to avoid Groovy closure delegate shadowing inside Jenkins sandbox
         keys.each { key ->
-            def value = state[key]
+            def value = this.state[key]
             if (value != null) {
                 steps.env."${key}" = value.toString()
             }
