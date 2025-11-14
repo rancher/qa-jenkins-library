@@ -54,10 +54,10 @@ class DockerManager implements Serializable {
         }
         logInfo('Copying SSH keys into shared Docker volume')
         steps.sh """
-            docker run --rm \\
-                -v ${volumeName}:/target \\
-                -v \$(pwd)/${sshDir}:/source:ro \\
-                alpine:latest \\
+            docker run --rm \
+                -v ${volumeName}:/target \
+                -v \$(pwd)/${sshDir}:/source:ro \
+                alpine:latest \
                 sh -c '
                     if [ -d /source ] && [ -n "\$(ls -A /source 2>/dev/null)" ]; then
                         mkdir -p /target/.ssh
@@ -116,45 +116,63 @@ class DockerManager implements Serializable {
     }
 
     private String buildDockerCommand(String imageName, String volumeName, String containerName, String envFile, String scriptFile, Map extraEnv, String credentialEnvFile) {
-        def mounts = [] as List<String>
-        if (volumeName) {
-            mounts << "-v ${volumeName}:/root"
-        }
         def repoRoot = steps.pwd()
-        if (steps.fileExists("${repoRoot}/tests")) {
-            mounts << "-v ${repoRoot}/tests:/root/go/src/github.com/rancher/tests"
-        } else {
-            mounts << "-v ${repoRoot}:/root/go/src/github.com/rancher/tests"
-        }
-        if (steps.fileExists("${repoRoot}/qa-infra-automation")) {
-            mounts << "-v ${repoRoot}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation"
-        }
-        mounts << "-v ${repoRoot}/${scriptFile}:/tmp/script.sh"
-        if (steps.fileExists("${repoRoot}/${envFile}")) {
-            mounts << "-v ${repoRoot}/${envFile}:/tmp/.env"
+        def mountSpecs = [] as List<String>
+
+        if (volumeName) {
+            mountSpecs << "${volumeName}:/root"
         }
 
-        def envArgs = [] as List<String>
-        envArgs << '--env-file /tmp/.env'
+        if (steps.fileExists("${repoRoot}/tests")) {
+            mountSpecs << "${repoRoot}/tests:/root/go/src/github.com/rancher/tests"
+        } else {
+            mountSpecs << "${repoRoot}:/root/go/src/github.com/rancher/tests"
+        }
+
+        if (steps.fileExists("${repoRoot}/qa-infra-automation")) {
+            mountSpecs << "${repoRoot}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation"
+        }
+
+        mountSpecs << "${repoRoot}/${scriptFile}:/tmp/script.sh"
+
+        def envFileMounted = false
+        if (envFile && steps.fileExists("${repoRoot}/${envFile}")) {
+            mountSpecs << "${repoRoot}/${envFile}:/tmp/.env"
+            envFileMounted = true
+        }
+
+        def command = ['docker', 'run', '--rm']
+        command += mountSpecs.collectMany { ['-v', it] }
+        command += ['--name', containerName]
+
+        if (envFileMounted) {
+            command += ['--env-file', '/tmp/.env']
+        }
+
         extraEnv.each { key, value ->
             if (value != null) {
-                envArgs << "-e ${key}=${value}".toString()
+                def strValue = value.toString()
+                if (strValue.trim()) {
+                    command += ['-e', "${key}=${strValue}".toString()]
+                }
             }
         }
-        envArgs << "-e TF_WORKSPACE=${steps.env.TF_WORKSPACE ?: ''}"
-        envArgs << "-e TERRAFORM_VARS_FILENAME=${steps.env.TERRAFORM_VARS_FILENAME ?: 'cluster.tfvars'}"
 
-        def credentialFlag = credentialEnvFile ? " --env-file ${credentialEnvFile}" : ''
-        def command = ['docker', 'run', '--rm']
-        command += mounts.collect { ['-v', it] }.flatten()
-        command += ['--name', containerName]
-        command += envArgs
+        def tfWorkspace = steps.env.TF_WORKSPACE ?: ''
+        command += ['-e', "TF_WORKSPACE=${tfWorkspace}".toString()]
+
+        def tfVarsFile = steps.env.TERRAFORM_VARS_FILENAME ?: 'cluster.tfvars'
+        command += ['-e', "TERRAFORM_VARS_FILENAME=${tfVarsFile}".toString()]
+
+        if (credentialEnvFile) {
+            command += ['--env-file', credentialEnvFile]
+        }
+
         command << imageName
         command << '/bin/bash'
         command << '/tmp/script.sh'
 
-        def rendered = command.join(' ')
-        return credentialFlag ? "${rendered}${credentialFlag}" : rendered
+        return command.join(' ')
     }
 
     private String writeTempScript(String scriptContent) {
