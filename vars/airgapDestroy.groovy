@@ -187,29 +187,30 @@ perform_cleanup \"${reason}\" \"${state.TF_WORKSPACE}\" \"true\"
     }
 
     private void cleanupS3Workspace() {
+        def currentState = this.@state
         def required = ['S3_BUCKET_NAME', 'S3_BUCKET_REGION', 'S3_KEY_PREFIX', 'TF_WORKSPACE']
-        def missing = required.findAll { !state[it] }
+        def missing = required.findAll { !currentState[it] }
         if (missing) {
             def message = "Skipping S3 cleanup due to missing variables: ${missing.join(', ')}"
             steps.echo "${PipelineDefaults.LOG_PREFIX_WARNING} ${timestamp()} ${message}"
             return
         }
 
+        def bucket = currentState.S3_BUCKET_NAME
+        def region = currentState.S3_BUCKET_REGION
+        def workspace = currentState.TF_WORKSPACE
+
         steps.withCredentials([
                 steps.string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_ACCESS_KEY_ID'),
                 steps.string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET_ACCESS_KEY')
             ]) {
-                def bucket = state.S3_BUCKET_NAME
-                def region = state.S3_BUCKET_REGION
-                def workspace = state.TF_WORKSPACE
-
                 def script = """#!/bin/bash
 set -euo pipefail
 
 docker run --rm \\
     -e AWS_ACCESS_KEY_ID=\"${'$'}{AWS_ACCESS_KEY_ID}\" \\
     -e AWS_SECRET_ACCESS_KEY=\"${'$'}{AWS_SECRET_ACCESS_KEY}\" \\
-    -e AWS_DEFAULT_REGION=\"${state.S3_BUCKET_REGION}\" \\
+    -e AWS_DEFAULT_REGION=\"${region}\" \\
     amazon/aws-cli:latest \\
     sh -c 'set -euo pipefail
     if aws s3 ls "s3://${bucket}/env:/${workspace}/" --region "${region}" 2>/dev/null; then
@@ -217,14 +218,14 @@ docker run --rm \\
         aws s3 ls "s3://${bucket}/env:/${workspace}/" --recursive --region "${region}" || true
         aws s3 rm "s3://${bucket}/env:/${workspace}/" --recursive --region "${region}"
         if aws s3 ls "s3://${bucket}/env:/${workspace}/" --region "${region}" 2>/dev/null; then
-            echo "ERROR: Failed to delete workspace directory" >&2
-            exit 1
-        else
-            echo "[OK] Successfully deleted workspace directory: s3://${bucket}/env:/${workspace}/"
-        fi
+        echo "ERROR: Failed to delete workspace directory" >&2
+        exit 1
     else
-        echo "[INFO] Workspace directory does not exist in S3 - nothing to clean up"
-    fi'
+            echo "[OK] Successfully deleted workspace directory: s3://${bucket}/env:/${workspace}/"
+    fi
+else
+    echo "[INFO] Workspace directory does not exist in S3 - nothing to clean up"
+fi'
 """
             steps.sh(label: 'Cleanup S3 workspace directory', script: script)
             }
