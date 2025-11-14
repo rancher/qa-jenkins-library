@@ -59,7 +59,7 @@ class DockerManager implements Serializable {
                 -v \$(pwd)/${sshDir}:/source:ro \
                 alpine:latest \
                 sh -c '
-                    if [ -d /source ] && [ -n "\$(ls -A /source 2>/dev/null)" ]; then
+                    if [ -d /source ] && [ -n "\$(ls -A /source 2>/null)" ]; then
                         mkdir -p /target/.ssh
                         chmod 700 /target/.ssh
                         cp /source/* /target/.ssh/ || { echo "Failed to copy keys"; exit 1; }
@@ -135,18 +135,21 @@ class DockerManager implements Serializable {
 
         mountSpecs << "${repoRoot}/${scriptFile}:/tmp/script.sh"
 
-        def envFileMounted = false
-        if (envFile && steps.fileExists("${repoRoot}/${envFile}")) {
-            mountSpecs << "${repoRoot}/${envFile}:/tmp/.env"
-            envFileMounted = true
+        String envFileHostPath = null
+        if (envFile) {
+            def candidate = "${repoRoot}/${envFile}"
+            if (steps.fileExists(candidate)) {
+                mountSpecs << "${candidate}:/tmp/.env"
+                envFileHostPath = candidate
+            }
         }
 
         def command = ['docker', 'run', '--rm']
         command += mountSpecs.collectMany { ['-v', it] }
         command += ['--name', containerName]
 
-        if (envFileMounted) {
-            command += ['--env-file', '/tmp/.env']
+        if (envFileHostPath) {
+            command += ['--env-file', envFileHostPath]
         }
 
         extraEnv.each { key, value ->
@@ -165,7 +168,11 @@ class DockerManager implements Serializable {
         command += ['-e', "TERRAFORM_VARS_FILENAME=${tfVarsFile}".toString()]
 
         if (credentialEnvFile) {
-            command += ['--env-file', credentialEnvFile]
+            def credentialPath = "${repoRoot}/${credentialEnvFile}"
+            if (!steps.fileExists(credentialPath)) {
+                credentialPath = credentialEnvFile
+            }
+            command += ['--env-file', credentialPath]
         }
 
         command << imageName
