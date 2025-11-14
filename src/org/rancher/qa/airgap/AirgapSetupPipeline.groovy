@@ -76,21 +76,27 @@ class AirgapSetupPipeline implements Serializable {
             [$class: 'CloneOption', depth: 1, shallow: true]
         ]
 
+        // Capture state values into locals to avoid Jenkins CPS closure delegate shadowing
+        def testsBranch = this.state.RANCHER_TEST_REPO_BRANCH
+        def testsUrl = this.state.RANCHER_TEST_REPO_URL
+
         steps.dir('./tests') {
             steps.checkout([
                 $class: 'GitSCM',
-                branches: [[name: "*/${state.RANCHER_TEST_REPO_BRANCH}" ]],
+                branches: [[name: "*/${testsBranch}" ]],
                 extensions: checkoutExtensions,
-                userRemoteConfigs: [[url: state.RANCHER_TEST_REPO_URL]]
+                userRemoteConfigs: [[url: testsUrl]]
             ])
         }
 
+        def infraBranch = this.state.QA_INFRA_REPO_BRANCH
+        def infraUrl = this.state.QA_INFRA_REPO_URL
         steps.dir('./qa-infra-automation') {
             steps.checkout([
                 $class: 'GitSCM',
-                branches: [[name: "*/${state.QA_INFRA_REPO_BRANCH}" ]],
+                branches: [[name: "*/${infraBranch}" ]],
                 extensions: checkoutExtensions,
-                userRemoteConfigs: [[url: state.QA_INFRA_REPO_URL]]
+                userRemoteConfigs: [[url: infraUrl]]
             ])
             try {
                 def branch = steps.sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
@@ -279,8 +285,10 @@ class AirgapSetupPipeline implements Serializable {
         dockerManager.buildImage(state.IMAGE_NAME)
         dockerManager.createSharedVolume(state.VALIDATION_VOLUME)
 
+        // Capture to local to avoid closure resolving 'state' via delegate
+        def validationVol = this.state.VALIDATION_VOLUME
         steps.withCredentials(defaultCredentialBindings()) {
-            dockerManager.stageSshKeys(state.VALIDATION_VOLUME)
+            dockerManager.stageSshKeys(validationVol)
         }
 
         state.CONTAINER_PREPARED = true
@@ -361,21 +369,24 @@ class AirgapSetupPipeline implements Serializable {
         terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', steps.env.AWS_ACCESS_KEY_ID ?: '')
         terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', state.HOSTNAME_PREFIX ?: '')
 
-        steps.dir('qa-infra-automation/tofu/aws/modules/airgap') {
-            steps.writeFile file: state.TERRAFORM_VARS_FILENAME, text: terraformConfig
-            logInfo("Terraform variables written to ${state.TERRAFORM_VARS_FILENAME}")
-
-            def backendConfig = """
+                // Precompute filenames and backend config outside the closure to avoid delegate collisions
+                def tfVarsFilename = this.state.TERRAFORM_VARS_FILENAME
+                def backendFilename = this.state.TERRAFORM_BACKEND_CONFIG_FILENAME
+                def backendConfig = """
 terraform {
   backend \"s3\" {
-    bucket = \"${state.S3_BUCKET_NAME}\"
-    key    = \"${state.S3_KEY_PREFIX}\"
-    region = \"${state.S3_BUCKET_REGION}\"
+        bucket = \"${this.state.S3_BUCKET_NAME}\"
+        key    = \"${this.state.S3_KEY_PREFIX}\"
+        region = \"${this.state.S3_BUCKET_REGION}\"
   }
 }
 """.stripIndent()
-            steps.writeFile file: state.TERRAFORM_BACKEND_CONFIG_FILENAME, text: backendConfig
-            logInfo("Terraform backend config written to ${state.TERRAFORM_BACKEND_CONFIG_FILENAME}")
+                steps.dir('qa-infra-automation/tofu/aws/modules/airgap') {
+                        steps.writeFile file: tfVarsFilename, text: terraformConfig
+                        logInfo("Terraform variables written to ${tfVarsFilename}")
+
+                        steps.writeFile file: backendFilename, text: backendConfig
+                        logInfo("Terraform backend config written to ${backendFilename}")
         }
     }
 
