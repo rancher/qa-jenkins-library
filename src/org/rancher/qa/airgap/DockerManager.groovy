@@ -234,6 +234,14 @@ class DockerManager implements Serializable {
         }
         steps.writeFile file: fileName, text: content.join('\n')
         steps.sh "chmod 600 ${fileName}"
+
+        // Validate file contents: only KEY=VALUE lines allowed
+        def fileText = steps.readFile(file: fileName)
+        def lines = fileText.split('\n')
+        def valid = lines.every { it ==~ /^[A-Z0-9_]+=[^=]+$/ }
+        if (!valid) {
+            steps.error("Malformed credentials file: ${fileName}. Aborting for security.")
+        }
         return fileName
     }
 
