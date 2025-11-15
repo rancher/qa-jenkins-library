@@ -37,6 +37,9 @@ class ArtifactManager implements Serializable {
                     if [ -f "/source/deployment-summary.json" ]; then
                         cp /source/deployment-summary.json /dest/
                     fi
+                    if [ -f "/source/ansible-inventory.yml" ]; then
+                        cp /source/ansible-inventory.yml /dest/
+                    fi
                 '
         """.stripIndent()
         steps.sh script
