@@ -102,11 +102,17 @@ class DockerManager implements Serializable {
         def scriptFile = writeTempScript(scriptContent)
         String credentialEnvFile = null
         String combinedEnvFile = null
+        String stagedAnsibleVarsFile = null
         try {
             validateDockerRuntime(imageName)
             steps.withCredentials(defaultCredentialBindings()) {
                 credentialEnvFile = writeCredentialEnvFile()
-                // Create a temp env file ONLY from extraEnv map to avoid parsing arbitrary base .env content
+                // If ANSIBLE_VARIABLES contains multi-line content, stage it to a file and pass ANSIBLE_VARIABLES_FILE instead
+                def staged = stageAnsibleVariablesIfNeeded(extraEnv)
+                extraEnv = staged.updatedEnv as Map
+                stagedAnsibleVarsFile = staged.hostFilePath
+
+                // Create a temp env file ONLY from extraEnv map (after staging) to avoid parsing arbitrary base .env content
                 combinedEnvFile = writeExtraEnvFile(extraEnv)
                 // Provide multiple env-files: base .env (if present) and the extra-only env file (if created)
                 def envFiles = [] as List<String>
@@ -116,14 +122,19 @@ class DockerManager implements Serializable {
                 if (combinedEnvFile) {
                     envFiles << combinedEnvFile
                 }
-                // Avoid inline -e flags by passing an empty extraEnv map
-                def dockerCmd = buildDockerCommand(imageName, volumeName, containerName, envFiles, scriptFile, [:], credentialEnvFile)
+                // Only allow safe inline env flags; currently we only pass ANSIBLE_VARIABLES_FILE inline
+                def inlineEnv = [:]
+                if (extraEnv.containsKey('ANSIBLE_VARIABLES_FILE')) {
+                    inlineEnv['ANSIBLE_VARIABLES_FILE'] = extraEnv['ANSIBLE_VARIABLES_FILE']
+                }
+
+                def dockerCmd = buildDockerCommand(imageName, volumeName, containerName, envFiles, scriptFile, inlineEnv, credentialEnvFile)
                 steps.timeout(time: timeoutMinutes, unit: 'MINUTES') {
                     steps.sh dockerCmd
                 }
             }
         } finally {
-            cleanupTempFiles(scriptFile, credentialEnvFile, combinedEnvFile)
+            cleanupTempFiles(scriptFile, credentialEnvFile, combinedEnvFile, stagedAnsibleVarsFile)
         }
     }
 
@@ -204,7 +215,7 @@ class DockerManager implements Serializable {
         return fileName
     }
 
-    private void cleanupTempFiles(String scriptFile, String credentialEnvFile, String combinedEnvFile = null) {
+    private void cleanupTempFiles(String scriptFile, String credentialEnvFile, String combinedEnvFile = null, String stagedAnsibleVarsFile = null) {
         try {
             steps.sh "rm -f ${scriptFile} || true"
         } catch (Exception ignored) {
@@ -224,6 +235,13 @@ class DockerManager implements Serializable {
                 steps.sh "rm -f ${combinedEnvFile} || true"
             }
         }
+        if (stagedAnsibleVarsFile && steps.fileExists(stagedAnsibleVarsFile)) {
+            try {
+                steps.sh "shred -vfz -n 3 ${stagedAnsibleVarsFile} 2>/dev/null || rm -f ${stagedAnsibleVarsFile}"
+            } catch (Exception ignored) {
+                steps.sh "rm -f ${stagedAnsibleVarsFile} || true"
+            }
+        }
     }
 
     /**
@@ -240,6 +258,7 @@ class DockerManager implements Serializable {
                 if (!keyOk) {
                     logWarning("Skipping invalid env key: ${k}")
                 } else if (val.contains('\n')) {
+                    // Multi-line values are not supported in env files; these should be staged separately if needed
                     logWarning("Skipping multi-line value for key: ${k}")
                 } else {
                     entries << "${k}=${val}"
@@ -259,6 +278,40 @@ class DockerManager implements Serializable {
             steps.error("Malformed extra env file: ${fileName}")
         }
         return fileName
+    }
+
+    /**
+     * If extraEnv contains a multi-line ANSIBLE_VARIABLES value, write it to a file within the mounted tests path
+     * and set ANSIBLE_VARIABLES_FILE to the corresponding container path. Removes ANSIBLE_VARIABLES from the map.
+     * Returns a map: [updatedEnv: Map, hostFilePath: String]
+     */
+    private Map stageAnsibleVariablesIfNeeded(Map extraEnv) {
+        def result = [updatedEnv: new LinkedHashMap(extraEnv ?: [:]), hostFilePath: null]
+        def val = (extraEnv ?: [:]).get('ANSIBLE_VARIABLES')
+        if (val != null) {
+            def str = val.toString()
+            if (str.contains('\n')) {
+                def relDir = 'tests/validation/.tmp'
+                def hostDir = relDir
+                try {
+                    steps.sh "mkdir -p ${hostDir}"
+                } catch (Exception ignored) {
+                // best-effort
+                }
+                def fileName = "ansible-vars-${System.currentTimeMillis()}.yml"
+                def hostPath = "${hostDir}/${fileName}"
+                steps.writeFile(file: hostPath, text: str)
+                steps.sh "chmod 600 ${hostPath}"
+
+                // Container sees tests mounted at /root/go/src/github.com/rancher/tests
+                def containerPath = "/root/go/src/github.com/rancher/tests/${relDir}/${fileName}"
+                result.updatedEnv.remove('ANSIBLE_VARIABLES')
+                result.updatedEnv.put('ANSIBLE_VARIABLES_FILE', containerPath)
+                result.hostFilePath = hostPath
+                logInfo("Staged ANSIBLE_VARIABLES to file and set ANSIBLE_VARIABLES_FILE: ${containerPath}")
+            }
+        }
+        return result
     }
 
     private void validateDockerRuntime(String imageName) {

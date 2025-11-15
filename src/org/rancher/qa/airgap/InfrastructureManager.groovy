@@ -28,6 +28,12 @@ source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/
     void prepareAnsible(Map opts = [:]) {
         def script = '''#!/bin/bash
 set -e
+
+# If provided, load multi-line ANSIBLE_VARIABLES from a file into the environment
+if [ -z "${ANSIBLE_VARIABLES:-}" ] && [ -n "${ANSIBLE_VARIABLES_FILE:-}" ] && [ -f "${ANSIBLE_VARIABLES_FILE}" ]; then
+  export ANSIBLE_VARIABLES="$(cat "${ANSIBLE_VARIABLES_FILE}")"
+fi
+
 source /root/go/src/github.com/rancher/tests/validation/pipeline/scripts/airgap/ansible_prepare_environment.sh
 '''
         docker.executeScriptInContainer([
