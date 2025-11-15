@@ -338,19 +338,19 @@ class DockerManager implements Serializable {
     private String writeCredentialEnvFile() {
         def fileName = "docker-credentials-${System.currentTimeMillis()}.env"
         def content = [] as List<String>
-        if (steps.env.AWS_ACCESS_KEY_ID) {
-            content << "AWS_ACCESS_KEY_ID=${steps.env.AWS_ACCESS_KEY_ID}"
-        }
-        if (steps.env.AWS_SECRET_ACCESS_KEY) {
-            content << "AWS_SECRET_ACCESS_KEY=${steps.env.AWS_SECRET_ACCESS_KEY}"
-        }
+        // Export all credential variables; use empty string if not set to avoid unbound variable errors
+        content << "AWS_ACCESS_KEY_ID=${steps.env.AWS_ACCESS_KEY_ID ?: ''}"
+        content << "AWS_SECRET_ACCESS_KEY=${steps.env.AWS_SECRET_ACCESS_KEY ?: ''}"
+        content << "AWS_SSH_PEM_KEY=${steps.env.AWS_SSH_PEM_KEY ?: ''}"
+        content << "AWS_SSH_KEY_NAME=${steps.env.AWS_SSH_KEY_NAME ?: ''}"
+
         steps.writeFile file: fileName, text: content.join('\n')
         steps.sh "chmod 600 ${fileName}"
 
-        // Validate file contents: only KEY=VALUE lines allowed
+        // Validate file contents: only KEY=VALUE lines allowed (may have empty values)
         def fileText = steps.readFile(file: fileName)
-        def lines = fileText.split('\n')
-        def valid = lines.every { it ==~ /^[A-Z0-9_]+=[^=]+$/ }
+        def lines = fileText.split('\n').findAll { it.trim() }
+        def valid = lines.every { it ==~ /^[A-Z0-9_]+=[^=]*$/ }
         if (!valid) {
             steps.error("Malformed credentials file: ${fileName}. Aborting for security.")
         }
