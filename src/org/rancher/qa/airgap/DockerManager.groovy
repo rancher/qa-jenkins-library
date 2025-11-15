@@ -129,9 +129,18 @@ class DockerManager implements Serializable {
                 }
 
                 def dockerCmd = buildDockerCommand(imageName, volumeName, containerName, envFiles, scriptFile, inlineEnv, credentialEnvFile)
+                // Reduce log noise: execute the docker command via a wrapper script so the full command (with env-file paths) isn't echoed in Jenkins logs
+                def runnerName = "docker-run-${System.currentTimeMillis()}.sh"
+                steps.writeFile(file: runnerName, text: """#!/bin/bash
+set -Eeuo pipefail
+${dockerCmd}
+""".stripIndent())
+                steps.sh "chmod 700 ${runnerName}"
                 steps.timeout(time: timeoutMinutes, unit: 'MINUTES') {
-                    steps.sh dockerCmd
+                    steps.sh "./${runnerName}"
                 }
+                // Cleanup wrapper
+                try { steps.sh "rm -f ${runnerName}" } catch (Exception ignored) { }
             }
         } finally {
             cleanupTempFiles(scriptFile, credentialEnvFile, combinedEnvFile, stagedAnsibleVarsFile)
