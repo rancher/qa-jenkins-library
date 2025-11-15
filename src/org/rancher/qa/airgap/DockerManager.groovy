@@ -106,10 +106,18 @@ class DockerManager implements Serializable {
             validateDockerRuntime(imageName)
             steps.withCredentials(defaultCredentialBindings()) {
                 credentialEnvFile = writeCredentialEnvFile()
-                // Merge provided env file (if present) with extraEnv map into a temp env file
-                combinedEnvFile = writeCombinedEnvFile(envFile, extraEnv)
-                // Pass the combined env file; extraEnv is now empty to avoid inline -e flags
-                def dockerCmd = buildDockerCommand(imageName, volumeName, containerName, combinedEnvFile, scriptFile, [:], credentialEnvFile)
+                // Create a temp env file ONLY from extraEnv map to avoid parsing arbitrary base .env content
+                combinedEnvFile = writeExtraEnvFile(extraEnv)
+                // Provide multiple env-files: base .env (if present) and the extra-only env file (if created)
+                def envFiles = [] as List<String>
+                if (envFile) {
+                    envFiles << envFile
+                }
+                if (combinedEnvFile) {
+                    envFiles << combinedEnvFile
+                }
+                // Avoid inline -e flags by passing an empty extraEnv map
+                def dockerCmd = buildDockerCommand(imageName, volumeName, containerName, envFiles, scriptFile, [:], credentialEnvFile)
                 steps.timeout(time: timeoutMinutes, unit: 'MINUTES') {
                     steps.sh dockerCmd
                 }
@@ -119,7 +127,7 @@ class DockerManager implements Serializable {
         }
     }
 
-    private String buildDockerCommand(String imageName, String volumeName, String containerName, String envFile, String scriptFile, Map extraEnv, String credentialEnvFile) {
+    private String buildDockerCommand(String imageName, String volumeName, String containerName, List<String> envFiles, String scriptFile, Map extraEnv, String credentialEnvFile) {
         def repoRoot = steps.pwd()
         def mountSpecs = [] as List<String>
 
@@ -139,12 +147,14 @@ class DockerManager implements Serializable {
 
         mountSpecs << "${repoRoot}/${scriptFile}:/tmp/script.sh"
 
-        String envFileHostPath = null
-        if (envFile) {
-            def candidate = "${repoRoot}/${envFile}"
-            if (steps.fileExists(candidate)) {
-                mountSpecs << "${candidate}:/tmp/.env"
-                envFileHostPath = candidate
+        // Resolve env files (base .env and extra-only env file) if present
+        def envFileHostPaths = [] as List<String>
+        (envFiles ?: []).each { ef ->
+            if (ef) {
+                def candidate = ef.startsWith('/') ? ef : "${repoRoot}/${ef}"
+                if (steps.fileExists(candidate)) {
+                    envFileHostPaths << candidate
+                }
             }
         }
 
@@ -152,9 +162,8 @@ class DockerManager implements Serializable {
         command += mountSpecs.collectMany { ['-v', it] }
         command += ['--name', containerName]
 
-        if (envFileHostPath) {
-            command += ['--env-file', envFileHostPath]
-        }
+        // Add all env files
+        envFileHostPaths.each { efp -> command += ['--env-file', efp] }
 
         extraEnv.each { key, value ->
             if (value != null) {
@@ -172,7 +181,7 @@ class DockerManager implements Serializable {
         command += ['-e', "TERRAFORM_VARS_FILENAME=${tfVarsFile}".toString()]
 
         if (credentialEnvFile) {
-            def credentialPath = "${repoRoot}/${credentialEnvFile}"
+            def credentialPath = credentialEnvFile.startsWith('/') ? credentialEnvFile : "${repoRoot}/${credentialEnvFile}"
             if (!steps.fileExists(credentialPath)) {
                 credentialPath = credentialEnvFile
             }
@@ -215,37 +224,36 @@ class DockerManager implements Serializable {
     }
 
     /**
-     * Create a temporary env file that combines the main env file (if it exists)
-     * with key=value pairs from extraEnv. Returns the relative path to the temp file.
+     * Create a temporary env file from the provided extraEnv map only.
+     * This avoids parsing arbitrary content from the base .env file which may contain non KEY=VALUE lines.
+     * Returns the relative path to the temp file, or null if no entries are written.
      */
-    private String writeCombinedEnvFile(String baseEnvFile, Map extraEnv) {
-        def repoRoot = steps.pwd()
-        String basePath = baseEnvFile ? "${repoRoot}/${baseEnvFile}" : null
-        StringBuilder sb = new StringBuilder()
-        if (basePath && steps.fileExists(basePath)) {
-            try {
-                sb.append(steps.readFile(file: basePath)).append('\n')
-            } catch (Exception ignored) {
-                // continue with only extra env
-            }
-        }
+    private String writeExtraEnvFile(Map extraEnv) {
+        def entries = [] as List<String>
         (extraEnv ?: [:]).each { k, v ->
-            if (k && v != null) {
+            if (k && (v != null)) {
+                def keyOk = (k as String) ==~ /^[A-Za-z_][A-Za-z0-9_]*$/
                 def val = v.toString()
-                if (val.trim()) {
-                    sb.append("${k}=${val}\n")
+                if (!keyOk) {
+                    logWarning("Skipping invalid env key: ${k}")
+                } else if (val.contains('\n')) {
+                    logWarning("Skipping multi-line value for key: ${k}")
+                } else {
+                    entries << "${k}=${val}"
                 }
             }
         }
-        def fileName = "combined-env-${System.currentTimeMillis()}.env"
-        steps.writeFile file: fileName, text: sb.toString()
+        if (entries.isEmpty()) {
+            return null
+        }
+        def fileName = "extra-env-${System.currentTimeMillis()}.env"
+        steps.writeFile file: fileName, text: entries.join('\n') + '\n'
         steps.sh "chmod 600 ${fileName}"
 
-        // Basic validation: ensure lines are KEY=VALUE
-        def lines = sb.toString().split('\n').findAll { it }
-        def valid = lines.every { it ==~ /^[A-Za-z_][A-Za-z0-9_]*=.*$/ }
+        // Validate lines are KEY=VALUE
+        def valid = entries.every { it ==~ /^[A-Za-z_][A-Za-z0-9_]*=.*$/ }
         if (!valid) {
-            steps.error("Malformed combined env file: ${fileName}")
+            steps.error("Malformed extra env file: ${fileName}")
         }
         return fileName
     }
