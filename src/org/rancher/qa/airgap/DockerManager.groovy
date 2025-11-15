@@ -101,17 +101,21 @@ class DockerManager implements Serializable {
 
         def scriptFile = writeTempScript(scriptContent)
         String credentialEnvFile = null
+        String combinedEnvFile = null
         try {
             validateDockerRuntime(imageName)
             steps.withCredentials(defaultCredentialBindings()) {
                 credentialEnvFile = writeCredentialEnvFile()
-                def dockerCmd = buildDockerCommand(imageName, volumeName, containerName, envFile, scriptFile, extraEnv, credentialEnvFile)
+                // Merge provided env file (if present) with extraEnv map into a temp env file
+                combinedEnvFile = writeCombinedEnvFile(envFile, extraEnv)
+                // Pass the combined env file; extraEnv is now empty to avoid inline -e flags
+                def dockerCmd = buildDockerCommand(imageName, volumeName, containerName, combinedEnvFile, scriptFile, [:], credentialEnvFile)
                 steps.timeout(time: timeoutMinutes, unit: 'MINUTES') {
                     steps.sh dockerCmd
                 }
             }
         } finally {
-            cleanupTempFiles(scriptFile, credentialEnvFile)
+            cleanupTempFiles(scriptFile, credentialEnvFile, combinedEnvFile)
         }
     }
 
@@ -188,7 +192,7 @@ class DockerManager implements Serializable {
         return fileName
     }
 
-    private void cleanupTempFiles(String scriptFile, String credentialEnvFile) {
+    private void cleanupTempFiles(String scriptFile, String credentialEnvFile, String combinedEnvFile = null) {
         try {
             steps.sh "rm -f ${scriptFile} || true"
         } catch (Exception ignored) {
@@ -201,6 +205,49 @@ class DockerManager implements Serializable {
                 steps.sh "rm -f ${credentialEnvFile} || true"
             }
         }
+        if (combinedEnvFile && steps.fileExists(combinedEnvFile)) {
+            try {
+                steps.sh "shred -vfz -n 3 ${combinedEnvFile} 2>/dev/null || rm -f ${combinedEnvFile}"
+            } catch (Exception ignored) {
+                steps.sh "rm -f ${combinedEnvFile} || true"
+            }
+        }
+    }
+
+    /**
+     * Create a temporary env file that combines the main env file (if it exists)
+     * with key=value pairs from extraEnv. Returns the relative path to the temp file.
+     */
+    private String writeCombinedEnvFile(String baseEnvFile, Map extraEnv) {
+        def repoRoot = steps.pwd()
+        String basePath = baseEnvFile ? "${repoRoot}/${baseEnvFile}" : null
+        StringBuilder sb = new StringBuilder()
+        if (basePath && steps.fileExists(basePath)) {
+            try {
+                sb.append(steps.readFile(file: basePath)).append('\n')
+            } catch (Exception ignored) {
+                // continue with only extra env
+            }
+        }
+        (extraEnv ?: [:]).each { k, v ->
+            if (k && v != null) {
+                def val = v.toString()
+                if (val.trim()) {
+                    sb.append("${k}=${val}\n")
+                }
+            }
+        }
+        def fileName = "combined-env-${System.currentTimeMillis()}.env"
+        steps.writeFile file: fileName, text: sb.toString()
+        steps.sh "chmod 600 ${fileName}"
+
+        // Basic validation: ensure lines are KEY=VALUE
+        def lines = sb.toString().split('\n').findAll { it }
+        def valid = lines.every { it ==~ /^[A-Za-z_][A-Za-z0-9_]*=.*$/ }
+        if (!valid) {
+            steps.error("Malformed combined env file: ${fileName}")
+        }
+        return fileName
     }
 
     private void validateDockerRuntime(String imageName) {
