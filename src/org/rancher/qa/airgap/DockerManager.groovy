@@ -291,8 +291,9 @@ class DockerManager implements Serializable {
         if (val != null) {
             def str = val.toString()
             if (str.contains('\n')) {
-                def relDir = 'tests/validation/.tmp'
-                def hostDir = relDir
+                // Host path lives under tests/, container mount root is /root/go/src/github.com/rancher/tests
+                def relDirUnderTests = 'validation/.tmp'
+                def hostDir = "tests/${relDirUnderTests}"
                 try {
                     steps.sh "mkdir -p ${hostDir}"
                 } catch (Exception ignored) {
@@ -304,7 +305,7 @@ class DockerManager implements Serializable {
                 steps.sh "chmod 600 ${hostPath}"
 
                 // Container sees tests mounted at /root/go/src/github.com/rancher/tests
-                def containerPath = "/root/go/src/github.com/rancher/tests/${relDir}/${fileName}"
+                def containerPath = "/root/go/src/github.com/rancher/tests/${relDirUnderTests}/${fileName}"
                 result.updatedEnv.remove('ANSIBLE_VARIABLES')
                 result.updatedEnv.put('ANSIBLE_VARIABLES_FILE', containerPath)
                 result.hostFilePath = hostPath
