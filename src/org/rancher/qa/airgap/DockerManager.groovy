@@ -142,7 +142,10 @@ class DockerManager implements Serializable {
         }
 
         if (steps.fileExists("${repoRoot}/qa-infra-automation")) {
+            // Go-style path for existing downstream logic
             mountSpecs << "${repoRoot}/qa-infra-automation:/root/go/src/github.com/rancher/qa-infra-automation"
+            // Direct path expected by airgap_lib.sh (uses /root/qa-infra-automation/...)
+            mountSpecs << "${repoRoot}/qa-infra-automation:/root/qa-infra-automation"
         }
 
         mountSpecs << "${repoRoot}/${scriptFile}:/tmp/script.sh"
