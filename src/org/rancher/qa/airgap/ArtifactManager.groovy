@@ -28,18 +28,28 @@ class ArtifactManager implements Serializable {
                 alpine:latest \
                 sh -c '
                     set -e
+                    # Create destination if it does not exist
+                    mkdir -p /dest
+
+                    # Copy artifacts directory recursively
                     if [ -d "/source/artifacts" ]; then
-                        cp -r /source/artifacts/* /dest/ || true
+                        echo "Copying /source/artifacts/* to /dest/"
+                        cp -r /source/artifacts/* /dest/ 2>/dev/null || echo "No files in artifacts directory"
+                    else
+                        echo "No artifacts directory found in /source"
                     fi
-                    if [ -f "/source/kubeconfig.yaml" ]; then
-                        cp /source/kubeconfig.yaml /dest/
-                    fi
-                    if [ -f "/source/deployment-summary.json" ]; then
-                        cp /source/deployment-summary.json /dest/
-                    fi
-                    if [ -f "/source/ansible-inventory.yml" ]; then
-                        cp /source/ansible-inventory.yml /dest/
-                    fi
+
+                    # Copy individual files from root of shared volume
+                    for file in kubeconfig.yaml deployment-summary.json ansible-inventory.yml infrastructure-outputs.json; do
+                        if [ -f "/source/\$file" ]; then
+                            echo "Copying /source/\$file to /dest/"
+                            cp "/source/\$file" /dest/
+                        fi
+                    done
+
+                    # List what was extracted for debugging
+                    echo "Files extracted to artifacts:"
+                    ls -lah /dest/ || true
                 '
         """.stripIndent()
         steps.sh script
