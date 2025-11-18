@@ -12,7 +12,7 @@ class AirgapSetupPipeline implements Serializable {
     private static final List<String> DEFAULT_ARTIFACT_PATTERNS = [
         'artifacts/**',
         'infrastructure-outputs.json',
-        'ansible-inventory.yml',
+        'inventory.yml', // renamed from ansible-inventory.yml during extraction for consistency
         'kubeconfig.yaml',
         'deployment-summary.json'
     ]
@@ -369,10 +369,10 @@ class AirgapSetupPipeline implements Serializable {
         terraformConfig = terraformConfig.replace('${AWS_ACCESS_KEY_ID}', steps.env.AWS_ACCESS_KEY_ID ?: '')
         terraformConfig = terraformConfig.replace('${HOSTNAME_PREFIX}', state.HOSTNAME_PREFIX ?: '')
 
-                // Precompute filenames and backend config outside the closure to avoid delegate collisions
-                def tfVarsFilename = this.state.TERRAFORM_VARS_FILENAME
-                def backendFilename = this.state.TERRAFORM_BACKEND_CONFIG_FILENAME
-                def backendConfig = """
+        // Precompute filenames and backend config outside the closure to avoid delegate collisions
+        def tfVarsFilename = this.state.TERRAFORM_VARS_FILENAME
+        def backendFilename = this.state.TERRAFORM_BACKEND_CONFIG_FILENAME
+        def backendConfig = """
 terraform {
   backend \"s3\" {
         bucket = \"${this.state.S3_BUCKET_NAME}\"
@@ -381,12 +381,12 @@ terraform {
   }
 }
 """.stripIndent()
-                steps.dir('qa-infra-automation/tofu/aws/modules/airgap') {
-                        steps.writeFile file: tfVarsFilename, text: terraformConfig
-                        logInfo("Terraform variables written to ${tfVarsFilename}")
+        steps.dir('qa-infra-automation/tofu/aws/modules/airgap') {
+            steps.writeFile file: tfVarsFilename, text: terraformConfig
+            logInfo("Terraform variables written to ${tfVarsFilename}")
 
-                        steps.writeFile file: backendFilename, text: backendConfig
-                        logInfo("Terraform backend config written to ${backendFilename}")
+            steps.writeFile file: backendFilename, text: backendConfig
+            logInfo("Terraform backend config written to ${backendFilename}")
         }
     }
 
