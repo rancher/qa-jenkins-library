@@ -47,6 +47,12 @@ class ArtifactManager implements Serializable {
                         fi
                     done
 
+                    # Backward compatibility: if ansible-inventory.yml exists, also provide inventory.yml
+                    if [ -f "/dest/ansible-inventory.yml" ] && [ ! -f "/dest/inventory.yml" ]; then
+                        echo "Creating /dest/inventory.yml from legacy ansible-inventory.yml"
+                        cp "/dest/ansible-inventory.yml" "/dest/inventory.yml"
+                    fi
+
                     # List what was extracted for debugging
                     echo "Files extracted to artifacts:"
                     ls -lah /dest/ || true

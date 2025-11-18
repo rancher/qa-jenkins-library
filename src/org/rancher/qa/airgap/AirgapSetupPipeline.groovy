@@ -13,6 +13,7 @@ class AirgapSetupPipeline implements Serializable {
         'artifacts/**',
         'infrastructure-outputs.json',
         'inventory.yml', // renamed from ansible-inventory.yml during extraction for consistency
+        'ansible-inventory.yml', // legacy name kept for backward compatibility
         'kubeconfig.yaml',
         'deployment-summary.json'
     ]
@@ -472,7 +473,7 @@ perform_cleanup \"${reason}\" \"${state.TF_WORKSPACE}\" \"true\"
             case 'deployment':
                 return ['artifacts/**', 'terraform.tfstate', 'infrastructure-outputs.json']
             case 'ansible_prep':
-                return ['artifacts/**', 'ansible-inventory.yml']
+                return ['artifacts/**', 'inventory.yml', 'ansible-inventory.yml']
             case 'rke2':
             case 'rancher':
                 return ['artifacts/**', 'kubeconfig.yaml']
