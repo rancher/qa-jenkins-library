@@ -25,7 +25,7 @@ def _runInContainer(String command, Map envVars = [:], boolean returnStdout = fa
     }
 }
 
-// Initialize Tofu backend with S3 configuration
+// Initialize Tofu backend with S3 configuration using init-backend.sh script
 // [ dir: string, bucket: string, key: string, region: string, dynamodbTable?: string ]
 def initBackend(Map config) {
     if (!(config.dir && config.bucket && config.key && config.region)) {
@@ -34,17 +34,20 @@ def initBackend(Map config) {
 
     steps.echo "Initializing Tofu backend in ${config.dir}"
     
-    def backendConfig = [
-        "-backend-config=bucket=${config.bucket}",
-        "-backend-config=key=${config.key}",
-        "-backend-config=region=${config.region}"
+    // Build the init-backend.sh command
+    def scriptArgs = [
+        "s3",
+        "--bucket ${config.bucket}",
+        "--key ${config.key}",
+        "--region ${config.region}"
     ]
     
     if (config.dynamodbTable) {
-        backendConfig.add("-backend-config=dynamodb_table=${config.dynamodbTable}")
+        scriptArgs.add("--dynamodb-table ${config.dynamodbTable}")
     }
     
-    def initCommand = "tofu -chdir=${config.dir} init ${backendConfig.join(' ')}"
+    // Run the init-backend.sh script which generates backend.tf and runs tofu init
+    def initCommand = "cd ${config.dir} && ./scripts/init-backend.sh ${scriptArgs.join(' ')}"
     
     def envVars = [:]
     // AWS credentials should be passed from the calling context
