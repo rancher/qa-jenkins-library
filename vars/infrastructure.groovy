@@ -56,7 +56,9 @@ def writeSshKey(Map config) {
         steps.sh "chmod 600 ${keyPath}"
         
         // Generate public key from private key
-        def pubKeyPath = "${keyPath}.pub"
+        // Strip extension (e.g., .pem) and add .pub
+        def keyBaseName = config.keyName.replaceAll(/\.[^.]+$/, '')
+        def pubKeyPath = "${sshDir}/${keyBaseName}.pub"
         steps.sh "ssh-keygen -y -f ${keyPath} > ${pubKeyPath}"
         steps.sh "chmod 644 ${pubKeyPath}"
         
