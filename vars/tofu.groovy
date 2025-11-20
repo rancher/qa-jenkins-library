@@ -7,8 +7,14 @@ def _getImage() {
 
 // Run a command in the tofu/ansible container
 def _runInContainer(String command, Map envVars = [:], boolean returnStdout = false) {
-    def envArgs = envVars.collect { k, v -> "-e ${k}='${v}'" }.join(' ')
     def workspace = steps.pwd()
+    
+    // Build environment variable arguments
+    // AWS credentials will be automatically inherited from withCredentials block
+    def envArgs = "-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY"
+    if (envVars) {
+        envArgs += " " + envVars.collect { k, v -> "-e ${k}='${v}'" }.join(' ')
+    }
     
     def dockerCommand = "docker run --rm ${envArgs} -v ${workspace}:/workspace -w /workspace ${_getImage()} sh -c \"${command}\""
     
@@ -40,10 +46,9 @@ def initBackend(Map config) {
     
     def initCommand = "tofu -chdir=${config.dir} init ${backendConfig.join(' ')}"
     
-    def envVars = [
-        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
-        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
-    ]
+    def envVars = [:]
+    // AWS credentials should be passed from the calling context
+    // They are available through withCredentials in the Jenkinsfile
     
     def status = _runInContainer(initCommand, envVars)
     
@@ -64,10 +69,7 @@ def createWorkspace(Map config) {
     steps.echo "Creating and selecting workspace: ${config.name}"
     
     def command = "tofu -chdir=${config.dir} workspace new ${config.name}"
-    def envVars = [
-        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
-        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
-    ]
+    def envVars = [:]
     
     def status = _runInContainer(command, envVars)
     
@@ -89,10 +91,7 @@ def selectWorkspace(Map config) {
     steps.echo "Selecting workspace: ${config.name}"
     
     def command = "tofu -chdir=${config.dir} workspace select ${config.name}"
-    def envVars = [
-        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
-        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
-    ]
+    def envVars = [:]
     
     def status = _runInContainer(command, envVars)
     
@@ -124,10 +123,7 @@ def apply(Map config) {
     
     def applyCommand = "tofu -chdir=${config.dir} apply ${applyArgs.join(' ')}"
     
-    def envVars = [
-        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
-        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
-    ]
+    def envVars = [:]
     
     def status = _runInContainer(applyCommand, envVars)
     
@@ -159,10 +155,7 @@ def destroy(Map config) {
     
     def destroyCommand = "tofu -chdir=${config.dir} destroy ${destroyArgs.join(' ')}"
     
-    def envVars = [
-        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
-        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
-    ]
+    def envVars = [:]
     
     def status = _runInContainer(destroyCommand, envVars)
     
@@ -182,10 +175,7 @@ def deleteWorkspace(Map config) {
     
     steps.echo "Deleting workspace: ${config.name}"
     
-    def envVars = [
-        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
-        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
-    ]
+    def envVars = [:]
     
     // First, select default workspace
     _runInContainer("tofu -chdir=${config.dir} workspace select default", envVars)
@@ -213,10 +203,7 @@ def getOutputs(Map config) {
         ? "tofu -chdir=${config.dir} output -raw ${config.output}"
         : "tofu -chdir=${config.dir} output -json"
     
-    def envVars = [
-        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
-        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
-    ]
+    def envVars = [:]
     
     def outputJson = _runInContainer(outputCommand, envVars, true)
     
