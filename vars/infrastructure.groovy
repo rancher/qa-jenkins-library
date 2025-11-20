@@ -30,7 +30,7 @@ def writeConfig(Map config) {
     }
 }
 
-// Decode and write SSH key from base64
+// Decode and write SSH key from base64, and generate public key
 // [ keyContent: string, keyName: string, dir?: string ]
 def writeSshKey(Map config) {
     if (!(config.keyContent && config.keyName)) {
@@ -48,14 +48,19 @@ def writeSshKey(Map config) {
         // Decode base64 key content
         def decoded = new String(config.keyContent.decodeBase64())
         
-        // Write key file
+        // Write private key file
         def keyPath = "${sshDir}/${config.keyName}"
         steps.writeFile file: keyPath, text: decoded
         
-        // Set proper permissions
+        // Set proper permissions for private key
         steps.sh "chmod 600 ${keyPath}"
         
-        steps.echo "SSH key written successfully to ${keyPath}"
+        // Generate public key from private key
+        def pubKeyPath = "${keyPath}.pub"
+        steps.sh "ssh-keygen -y -f ${keyPath} > ${pubKeyPath}"
+        steps.sh "chmod 644 ${pubKeyPath}"
+        
+        steps.echo "SSH key pair written successfully: ${keyPath} and ${pubKeyPath}"
         return keyPath
     } catch (e) {
         error "Failed to write SSH key: ${e.message}"
