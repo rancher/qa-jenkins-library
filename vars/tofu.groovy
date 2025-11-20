@@ -16,7 +16,7 @@ def _runInContainer(String command, Map envVars = [:], boolean returnStdout = fa
         envArgs += " " + envVars.collect { k, v -> "-e ${k}='${v}'" }.join(' ')
     }
     
-    def dockerCommand = "docker run --rm ${envArgs} -v ${workspace}:/workspace -w /workspace ${_getImage()} sh -c \"${command}\""
+    def dockerCommand = "docker run --rm --platform linux/amd64 ${envArgs} -v ${workspace}:/workspace -w /workspace ${_getImage()} sh -c \"${command}\""
     
     if (returnStdout) {
         return steps.sh(script: dockerCommand, returnStdout: true).trim()
