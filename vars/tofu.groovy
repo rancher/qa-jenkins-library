@@ -1,4 +1,23 @@
-// Tofu/Terraform operations for Jenkins pipelines
+// Tofu/Terraform operations for Jenkins pipelines (Docker-based)
+
+// Get the Docker image to use for tofu commands
+def _getImage() {
+    return 'rancher-infra-tools:latest'
+}
+
+// Run a command in the tofu/ansible container
+def _runInContainer(String command, Map envVars = [:], boolean returnStdout = false) {
+    def envArgs = envVars.collect { k, v -> "-e ${k}='${v}'" }.join(' ')
+    def workspace = steps.pwd()
+    
+    def dockerCommand = "docker run --rm ${envArgs} -v ${workspace}:/workspace -w /workspace ${_getImage()} sh -c \"${command}\""
+    
+    if (returnStdout) {
+        return steps.sh(script: dockerCommand, returnStdout: true).trim()
+    } else {
+        return steps.sh(script: dockerCommand, returnStatus: true)
+    }
+}
 
 // Initialize Tofu backend with S3 configuration
 // [ dir: string, bucket: string, key: string, region: string, dynamodbTable?: string ]
@@ -21,7 +40,12 @@ def initBackend(Map config) {
     
     def initCommand = "tofu -chdir=${config.dir} init ${backendConfig.join(' ')}"
     
-    def status = steps.sh(script: initCommand, returnStatus: true)
+    def envVars = [
+        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
+        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
+    ]
+    
+    def status = _runInContainer(initCommand, envVars)
     
     if (status != 0) {
         error "Tofu backend initialization failed with status ${status}"
@@ -39,10 +63,13 @@ def createWorkspace(Map config) {
     
     steps.echo "Creating and selecting workspace: ${config.name}"
     
-    def status = steps.sh(
-        script: "tofu -chdir=${config.dir} workspace new ${config.name}",
-        returnStatus: true
-    )
+    def command = "tofu -chdir=${config.dir} workspace new ${config.name}"
+    def envVars = [
+        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
+        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
+    ]
+    
+    def status = _runInContainer(command, envVars)
     
     if (status != 0) {
         error "Failed to create workspace ${config.name}"
@@ -61,10 +88,13 @@ def selectWorkspace(Map config) {
     
     steps.echo "Selecting workspace: ${config.name}"
     
-    def status = steps.sh(
-        script: "tofu -chdir=${config.dir} workspace select ${config.name}",
-        returnStatus: true
-    )
+    def command = "tofu -chdir=${config.dir} workspace select ${config.name}"
+    def envVars = [
+        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
+        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
+    ]
+    
+    def status = _runInContainer(command, envVars)
     
     if (status != 0) {
         error "Failed to select workspace ${config.name}"
@@ -94,7 +124,12 @@ def apply(Map config) {
     
     def applyCommand = "tofu -chdir=${config.dir} apply ${applyArgs.join(' ')}"
     
-    def status = steps.sh(script: applyCommand, returnStatus: true)
+    def envVars = [
+        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
+        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
+    ]
+    
+    def status = _runInContainer(applyCommand, envVars)
     
     if (status != 0) {
         error "Tofu apply failed with status ${status}"
@@ -124,7 +159,12 @@ def destroy(Map config) {
     
     def destroyCommand = "tofu -chdir=${config.dir} destroy ${destroyArgs.join(' ')}"
     
-    def status = steps.sh(script: destroyCommand, returnStatus: true)
+    def envVars = [
+        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
+        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
+    ]
+    
+    def status = _runInContainer(destroyCommand, envVars)
     
     if (status != 0) {
         error "Tofu destroy failed with status ${status}"
@@ -142,14 +182,16 @@ def deleteWorkspace(Map config) {
     
     steps.echo "Deleting workspace: ${config.name}"
     
+    def envVars = [
+        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
+        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
+    ]
+    
     // First, select default workspace
-    steps.sh(script: "tofu -chdir=${config.dir} workspace select default", returnStatus: true)
+    _runInContainer("tofu -chdir=${config.dir} workspace select default", envVars)
     
     // Then delete the target workspace
-    def status = steps.sh(
-        script: "tofu -chdir=${config.dir} workspace delete ${config.name}",
-        returnStatus: true
-    )
+    def status = _runInContainer("tofu -chdir=${config.dir} workspace delete ${config.name}", envVars)
     
     if (status != 0) {
         steps.echo "Warning: Failed to delete workspace ${config.name}"
@@ -171,7 +213,12 @@ def getOutputs(Map config) {
         ? "tofu -chdir=${config.dir} output -raw ${config.output}"
         : "tofu -chdir=${config.dir} output -json"
     
-    def outputJson = steps.sh(script: outputCommand, returnStdout: true).trim()
+    def envVars = [
+        'AWS_ACCESS_KEY_ID': steps.env.AWS_ACCESS_KEY_ID,
+        'AWS_SECRET_ACCESS_KEY': steps.env.AWS_SECRET_ACCESS_KEY
+    ]
+    
+    def outputJson = _runInContainer(outputCommand, envVars, true)
     
     if (config.output) {
         return outputJson

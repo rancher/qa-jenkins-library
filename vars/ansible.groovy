@@ -1,4 +1,9 @@
-// Ansible operations for Jenkins pipelines
+// Ansible operations for Jenkins pipelines (Docker-based)
+
+// Get the Docker image to use for ansible commands
+def _getImage() {
+    return 'rancher-infra-tools:latest'
+}
 
 // Run an Ansible playbook
 // [ dir: string, inventory: string, playbook: string, extraVars?: Map, tags?: string, limit?: string, verbose?: bool ]
@@ -40,7 +45,10 @@ def runPlaybook(Map config) {
     
     def ansibleCommand = "cd ${config.dir} && ${ansibleArgs.join(' ')}"
     
-    def status = steps.sh(script: ansibleCommand, returnStatus: true)
+    def workspace = steps.pwd()
+    def dockerCommand = "docker run --rm -v ${workspace}:/workspace -v ${workspace}/.ssh:/root/.ssh:ro -w /workspace ${_getImage()} sh -c \"${ansibleCommand}\""
+    
+    def status = steps.sh(script: dockerCommand, returnStatus: true)
     
     if (status != 0) {
         error "Ansible playbook execution failed with status ${status}"
