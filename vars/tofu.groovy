@@ -2,7 +2,8 @@
 
 // Get the Docker image to use for tofu commands
 def _getImage() {
-    return 'rancher-infra-tools:latest'
+    def config = new config()
+    return config.getDockerImage('infraTools')
 }
 
 // Run a command in the tofu/ansible container
@@ -16,7 +17,9 @@ def _runInContainer(String command, Map envVars = [:], boolean returnStdout = fa
         envArgs += " " + envVars.collect { k, v -> "-e ${k}='${v}'" }.join(' ')
     }
     
-    def dockerCommand = "docker run --rm --platform linux/amd64 ${envArgs} -v ${workspace}:/workspace -w /workspace ${_getImage()} sh -c \"${command}\""
+    def config = new config()
+    def platform = config.getDockerPlatform()
+    def dockerCommand = "docker run --rm --platform ${platform} ${envArgs} -v ${workspace}:/workspace -w /workspace ${_getImage()} sh -c \"${command}\""
     
     if (returnStdout) {
         return steps.sh(script: dockerCommand, returnStdout: true).trim()
@@ -28,8 +31,8 @@ def _runInContainer(String command, Map envVars = [:], boolean returnStdout = fa
 // Initialize Tofu backend with S3 configuration using init-backend.sh script
 // [ dir: string, bucket: string, key: string, region: string, dynamodbTable?: string ]
 def initBackend(Map config) {
-    if (!(config.dir && config.bucket && config.key && config.region)) {
-        error 'Directory, bucket, key, and region must be provided for backend initialization.'
+    if (!(config.dir && config.backendInitScript && config.bucket && config.key && config.region)) {
+        error 'Directory, BackendScript, bucket, key, and region must be provided for backend initialization.'
     }
 
     steps.echo "Initializing Tofu backend in ${config.dir}"
@@ -47,7 +50,7 @@ def initBackend(Map config) {
     }
     
     // Run the init-backend.sh script which generates backend.tf and runs tofu init
-    def initCommand = "cd ${config.dir} && ./scripts/init-backend.sh ${scriptArgs.join(' ')}"
+    def initCommand = "cd ${config.dir} && ${config.backendInitScript} ${scriptArgs.join(' ')}"
     
     def envVars = [:]
     // AWS credentials should be passed from the calling context
