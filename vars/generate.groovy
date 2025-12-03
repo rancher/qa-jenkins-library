@@ -1,18 +1,8 @@
 //  suffix string
 def names(String suffix = 'test') {
-    def jobName = env.JOB_NAME
-    def buildNumber = env.BUILD_NUMBER
-
-    if (jobName.contains('/')) {
-        def jobNames = jobName.split('/')
-
-        jobName = jobNames[jobNames.size() - 1]
-    }
-
-    def containerName = "${jobName}${buildNumber}_test"
-    def imageName = "rancher-validation-${jobName}${buildNumber}"
-
-    return [container: containerName, image: imageName]
+    def naming = new naming()
+    return naming.generateNames([suffix: suffix])
+}
 
 //Below enables name generation with Integer count param
 //requires docker's build.sh changes for name, right now it's not an ENV
@@ -33,4 +23,3 @@ def names(String suffix = 'test') {
 // }
 //
 // return resourceNames
-}

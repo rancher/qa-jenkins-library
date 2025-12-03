@@ -9,7 +9,9 @@ def useWithProperties(List<String> credentials, Closure body) {
 
 // body {}
 def useWithColor(Closure body) {
-    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
+    def globalConfig = new config()
+    def uiConfig = globalConfig.getUIConfig()
+    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': uiConfig.colorMapName, 'defaultFg': uiConfig.defaultFg, 'defaultBg': uiConfig.defaultBg]) {
         try {
             body()
         } catch (e) {

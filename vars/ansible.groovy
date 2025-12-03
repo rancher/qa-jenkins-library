@@ -46,7 +46,9 @@ def runPlaybook(Map config) {
     def ansibleCommand = "cd ${config.dir} && ${ansibleArgs.join(' ')}"
     
     def workspace = steps.pwd()
-    def dockerCommand = "docker run --rm --platform linux/amd64 -v ${workspace}:/workspace -v ${workspace}/.ssh:/root/.ssh:ro -w /workspace ${_getImage()} sh -c \"${ansibleCommand}\""
+    def globalConfig = new config()
+    def platform = globalConfig.getDockerPlatform()
+    def dockerCommand = "docker run --rm --platform ${platform} -v ${workspace}:/workspace -v ${workspace}/.ssh:/root/.ssh:ro -w /workspace ${_getImage()} sh -c \"${ansibleCommand}\""
     
     def status = steps.sh(script: dockerCommand, returnStatus: true)
     
