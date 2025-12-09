@@ -43,7 +43,13 @@ def runPlaybook(Map config) {
         ansibleArgs.add("-vvv")
     }
     
-    def ansibleCommand = "cd ${config.dir} && ${ansibleArgs.join(' ')}"
+    // Properly escape ansible arguments to prevent command injection
+    def escapedAnsibleArgs = ansibleArgs.collect { arg ->
+        // Escape any double quotes and backslashes in the argument
+        arg.replace('\\', '\\\\').replace('"', '\\"')
+    }
+    
+    def ansibleCommand = "cd ${config.dir} && ${escapedAnsibleArgs.join(' ')}"
     
     def workspace = steps.pwd()
     def globalConfig = new config()
@@ -85,7 +91,11 @@ def validateInventory(Map config) {
     
     steps.echo "Validating Ansible inventory: ${config.inventory}"
     
-    def validateCommand = "cd ${config.dir} && ansible-inventory -i ${config.inventory} --list > /dev/null"
+    // Properly escape inventory path to prevent command injection
+    def escapedDir = config.dir.replace('\\', '\\\\').replace('"', '\\"')
+    def escapedInventory = config.inventory.replace('\\', '\\\\').replace('"', '\\"')
+    
+    def validateCommand = "cd ${escapedDir} && ansible-inventory -i ${escapedInventory} --list > /dev/null"
     
     def status = steps.sh(script: validateCommand, returnStatus: true)
     
@@ -129,6 +139,12 @@ def runPlaybookInContainer(Map config) {
         envArgs = config.envVars.collect { k, v -> "-e ${k}=${v}" }
     }
     
+    // Properly escape ansible arguments to prevent command injection
+    def escapedAnsibleArgs = ansibleArgs.collect { arg ->
+        // Escape any double quotes and backslashes in the argument
+        arg.replace('\\', '\\\\').replace('"', '\\"')
+    }
+    
     def dockerCommand = [
         "docker run --rm",
         envArgs.join(' '),
@@ -136,7 +152,7 @@ def runPlaybookInContainer(Map config) {
         "-w /workspace",
         config.container,
         "-c",
-        "\"${ansibleArgs.join(' ')}\""
+        "\"${escapedAnsibleArgs.join(' ')}\""
     ].join(' ')
     
     def status = steps.sh(script: dockerCommand, returnStatus: true)
