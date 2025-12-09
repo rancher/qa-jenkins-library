@@ -36,8 +36,13 @@ def useWithFolderProperties(Closure body) {
     withFolderProperties {
         paramsMap = []
         params.each {
-            if (it.value && it.value.trim() != '') {
-                paramsMap << "$it.key=$it.value"
+            // Coerce non-string values (e.g., booleans) to String before trim to avoid MissingMethodException
+            def v = it.value
+            if (v != null) {
+                def s = v.toString()
+                if (s.trim() != '') {
+                    paramsMap << "$it.key=$s"
+                }
             }
         }
         try {
