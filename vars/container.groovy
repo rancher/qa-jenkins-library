@@ -150,7 +150,9 @@ def _containerCommand(Map container) {
     }
 
     if ( !(container?.envFile) ) {
-        container.envFile = '.env'
+        def globalConfig = new config()
+        def dockerConfig = globalConfig.getConfig('docker')
+        container.envFile = dockerConfig.defaultEnvFile
     }
 
     args.addAll(['--env-file', container.envFile])
@@ -232,13 +234,17 @@ def _goTestCommand(Map test) {
     args.add("--packages=${test.packages}")
 
     if (!(test?.resultsXML)) {
-        test.resultsXML = 'results.xml'
+        def globalConfig = new config()
+        def testConfig = globalConfig.getConfig('testing')
+        test.resultsXML = testConfig.defaultResultsXML
     }
 
     args.addAll(['--junitfile', test.resultsXML])
 
     if (!(test?.resultsJSON)) {
-        test.resultsJSON = 'results.json'
+        def globalConfig = new config()
+        def testConfig = globalConfig.getConfig('testing')
+        test.resultsJSON = testConfig.defaultResultsJSON
     }
 
     args.addAll(['--jsonfile', test.resultsJSON])
@@ -246,7 +252,9 @@ def _goTestCommand(Map test) {
     args.add('--')
 
     if (!(test?.tags)) {
-        test.tags = 'validation'
+        def globalConfig = new config()
+        def testConfig = globalConfig.getConfig('testing')
+        test.tags = testConfig.defaultTags
     }
 
     args.add("-tags=${test.tags}")
@@ -254,7 +262,9 @@ def _goTestCommand(Map test) {
     args.add(test.cases)
 
     if (!(test?.timeout)) {
-        test.timeout = '60m'
+        def globalConfig = new config()
+        def testConfig = globalConfig.getConfig('testing')
+        test.timeout = testConfig.defaultTimeout
     }
 
     args.add("-timeout=${test.timeout}")

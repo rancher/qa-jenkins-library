@@ -9,7 +9,9 @@ def useWithProperties(List<String> credentials, Closure body) {
 
 // body {}
 def useWithColor(Closure body) {
-    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': 'XTerm', 'defaultFg': 2, 'defaultBg':1]) {
+    def globalConfig = new config()
+    def uiConfig = globalConfig.getUIConfig()
+    wrap([$class: 'AnsiColorBuildWrapper', 'colorMapName': uiConfig.colorMapName, 'defaultFg': uiConfig.defaultFg, 'defaultBg': uiConfig.defaultBg]) {
         try {
             body()
         } catch (e) {
@@ -34,8 +36,13 @@ def useWithFolderProperties(Closure body) {
     withFolderProperties {
         paramsMap = []
         params.each {
-            if (it.value && it.value.trim() != '') {
-                paramsMap << "$it.key=$it.value"
+            // Coerce non-string values (e.g., booleans) to String before trim to avoid MissingMethodException
+            def v = it.value
+            if (v != null) {
+                def s = v.toString()
+                if (s.trim() != '') {
+                    paramsMap << "$it.key=$s"
+                }
             }
         }
         try {
