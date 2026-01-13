@@ -50,16 +50,52 @@ def writeSshKey(Map config) {
 
         // Write private key file
         def keyPath = "${sshDir}/${config.keyName}"
+        
+        // DIAGNOSTIC LOGGING
+        steps.echo "=== SSH Key Configuration ==="
+        steps.echo "SSH directory: ${sshDir}"
+        steps.echo "Key name: ${config.keyName}"
+        steps.echo "Full key path: ${keyPath}"
+        steps.echo "Current working directory: ${pwd()}"
+        
         steps.writeFile file: keyPath, text: decoded
+        
+        // Verify file was created
+        def fileExists = steps.sh(script: "test -f ${keyPath} && echo 'EXISTS' || echo 'NOT_EXISTS'", returnStdout: true).trim()
+        steps.echo "File creation status: ${fileExists}"
+        
+        if (fileExists != 'EXISTS') {
+            steps.echo "ERROR: SSH key file was not created at ${keyPath}"
+            steps.sh "ls -la ${sshDir} || echo 'Directory listing failed'"
+            error "Failed to create SSH key file at ${keyPath}"
+        }
 
         // Set proper permissions for private key
+        steps.echo "Setting permissions on ${keyPath}"
         steps.sh "chmod 600 ${keyPath}"
 
         // Generate public key from private key
         // Strip extension (e.g., .pem) and add .pub
         def keyBaseName = config.keyName.replaceAll(/\.[^.]+$/, '')
         def pubKeyPath = "${sshDir}/${keyBaseName}.pub"
+        
+        // DIAGNOSTIC LOGGING
+        steps.echo "=== Public Key Generation ==="
+        steps.echo "Key base name: ${keyBaseName}"
+        steps.echo "Public key path: ${pubKeyPath}"
+        
         steps.sh "ssh-keygen -y -f ${keyPath} > ${pubKeyPath}"
+        
+        // Verify public key was created
+        def pubFileExists = steps.sh(script: "test -f ${pubKeyPath} && echo 'EXISTS' || echo 'NOT_EXISTS'", returnStdout: true).trim()
+        steps.echo "Public key file creation status: ${pubFileExists}"
+        
+        if (pubFileExists != 'EXISTS') {
+            steps.echo "ERROR: Public key file was not created at ${pubKeyPath}"
+            steps.sh "ls -la ${sshDir} || echo 'Directory listing failed'"
+            error "Failed to create public key file at ${pubKeyPath}"
+        }
+        
         steps.sh "chmod 644 ${pubKeyPath}"
 
         steps.echo "SSH key pair written successfully: ${keyPath} and ${pubKeyPath}"
