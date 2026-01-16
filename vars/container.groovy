@@ -229,7 +229,7 @@ def _goTestCommand(Map test) {
         return error
     }
 
-    def args = ['/root/go/bin/gotestsum', '--format', 'standard-verbose' ]
+    def args = ['gotestsum', '--format', 'standard-verbose' ]
 
     args.add("--packages=${test.packages}")
 
