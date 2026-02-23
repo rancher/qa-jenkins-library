@@ -229,7 +229,10 @@ def _goTestCommand(Map test) {
         return error
     }
 
-    def args = ['gotestsum', '--format', 'standard-verbose' ]
+    // Prepend /root/go/bin so gotestsum is found on older images where it is
+    // installed there but not on the default PATH. \\$PATH defers expansion
+    // to the container's shell rather than the Jenkins agent's shell.
+    def args = ['PATH=/root/go/bin:\\$PATH', 'gotestsum', '--format', 'standard-verbose' ]
 
     args.add("--packages=${test.packages}")
 
