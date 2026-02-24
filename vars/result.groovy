@@ -1,4 +1,31 @@
-// until best practices
+/**
+ * result.groovy
+ *
+ * Test result reporting helpers for Jenkins pipelines.
+ *
+ * Copies JUnit XML result files out of a stopped test container and publishes
+ * them to Jenkins using the JUnit plugin so that test trends are tracked in
+ * the build history.
+ *
+ * The container is cleaned up (stopped + removed with its image) if the copy
+ * operation fails, preventing stale containers from accumulating on the agent.
+ *
+ * Usage
+ * -----
+ *   result.reportFromContainer(
+ *       name:       names.container,
+ *       image:      names.image,
+ *       workspace:  env.WORKSPACE_NAME,
+ *       dir:        'validation',
+ *       resultsXML: 'results.xml'
+ *   )
+ */
+
+/**
+ * Internal helper — instantiate a container object for cleanup operations.
+ *
+ * Returns a container instance used to call remove() on error.
+ */
 def _importFileContainer() {
     def c = new container()
 
@@ -50,7 +77,34 @@ def _importFileContainer() {
 //     }
 // }
 
-// [name: string, image: string, workspace: string, dir: string, resultsXML: string]
+/**
+ * Copy a JUnit XML result file out of a stopped test container and publish it
+ * to Jenkins using the JUnit result archiver.
+ *
+ * The result file is expected at the absolute container path:
+ *   /root/<workspace>/<dir>/<resultsXML>
+ *
+ * If the `docker cp` command fails the container and its image are removed
+ * and the error is re-thrown so the build is marked as failed.
+ *
+ * Parameters:
+ *   name       (String, required) - Name of the container to copy results from.
+ *   image      (String, required) - Image name used for cleanup on failure.
+ *   workspace  (String, required) - Workspace name that forms part of the
+ *                                   in-container result path.
+ *   dir        (String, optional) - Subdirectory within the workspace. Defaults to '.'.
+ *   resultsXML (String, required) - Filename of the JUnit XML result file
+ *                                   (e.g. 'results.xml').
+ *
+ * Example:
+ *   result.reportFromContainer(
+ *       name:       names.container,
+ *       image:      names.image,
+ *       workspace:  env.WORKSPACE_NAME,
+ *       dir:        'validation',
+ *       resultsXML: 'results.xml'
+ *   )
+ */
 def reportFromContainer(Map containerParams) {
     if (! (containerParams.name && containerParams.image))  {
         error 'Container name and image must be provided.'
