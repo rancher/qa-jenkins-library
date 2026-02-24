@@ -89,62 +89,79 @@ def writeSshKey(Map config) {
 
     def sshDir = config.dir ?: '.ssh'
 
+    // Validate inputs to prevent shell injection via interpolated paths
+    if (!config.keyName.matches(/[a-zA-Z0-9._-]+/)) {
+        error "SSH key name contains invalid characters (allowed: alphanumeric, dot, underscore, hyphen): ${config.keyName}"
+    }
+    if (!sshDir.matches(/[a-zA-Z0-9._\/-]+/)) {
+        error "SSH directory path contains invalid characters (allowed: alphanumeric, dot, underscore, hyphen, slash): ${sshDir}"
+    }
+
     steps.echo "Writing SSH key: ${config.keyName}"
 
+    String keyPath = "${sshDir}/${config.keyName}"
+    String keyBaseName = config.keyName.replaceAll(/\.[^.]+$/, '')
+    String pubKeyPath = "${sshDir}/${keyBaseName}.pub"
+    boolean debug = config.debug ?: (env.INFRASTRUCTURE_DEBUG == 'true')
+
     try {
-        // Create SSH directory if it doesn't exist
-        steps.sh "mkdir -p ${sshDir}"
+        steps.withEnv([
+            "SSH_DIR=${sshDir}",
+            "KEY_PATH=${keyPath}",
+            "PUB_KEY_PATH=${pubKeyPath}",
+        ]) {
+            // Create SSH directory if it doesn't exist
+            steps.sh 'mkdir -p "$SSH_DIR"'
 
-        // Decode base64 key content
-        def decoded = new String(config.keyContent.decodeBase64())
+            // Decode base64 key content and write private key file
+            String decoded = new String(config.keyContent.decodeBase64())
 
-        // Write private key file
-        def keyPath = "${sshDir}/${config.keyName}"
-        def debug = config.debug ?: (env.INFRASTRUCTURE_DEBUG == 'true')
+            if (debug) {
+                steps.echo '=== SSH Key Configuration ==='
+                steps.echo "SSH directory: ${sshDir}"
+                steps.echo "Key name: ${config.keyName}"
+                steps.echo "Full key path: ${keyPath}"
+                steps.echo "Current working directory: ${pwd()}"
+            }
 
-        if (debug) {
-            steps.echo "=== SSH Key Configuration ==="
-            steps.echo "SSH directory: ${sshDir}"
-            steps.echo "Key name: ${config.keyName}"
-            steps.echo "Full key path: ${keyPath}"
-            steps.echo "Current working directory: ${pwd()}"
+            steps.writeFile file: keyPath, text: decoded
+
+            // Verify file was created
+            String fileExists = steps.sh(
+                script: 'test -f "$KEY_PATH" && echo EXISTS || echo NOT_EXISTS',
+                returnStdout: true
+            ).trim()
+
+            if (fileExists != 'EXISTS') {
+                steps.sh 'ls -la "$SSH_DIR" || echo \'Directory listing failed\''
+                error "Failed to create SSH key file at ${keyPath}"
+            }
+
+            // Set proper permissions for private key
+            steps.sh 'chmod 600 "$KEY_PATH"'
+
+            if (debug) {
+                steps.echo '=== Public Key Generation ==='
+                steps.echo "Key base name: ${keyBaseName}"
+                steps.echo "Public key path: ${pubKeyPath}"
+            }
+
+            // Generate public key from private key
+            steps.sh 'ssh-keygen -y -f "$KEY_PATH" > "$PUB_KEY_PATH"'
+
+            // Verify public key was created
+            String pubFileExists = steps.sh(
+                script: 'test -f "$PUB_KEY_PATH" && echo EXISTS || echo NOT_EXISTS',
+                returnStdout: true
+            ).trim()
+
+            if (pubFileExists != 'EXISTS') {
+                steps.sh 'ls -la "$SSH_DIR" || echo \'Directory listing failed\''
+                error "Failed to create public key file at ${pubKeyPath}"
+            }
+
+            steps.sh 'chmod 644 "$PUB_KEY_PATH"'
         }
-
-        steps.writeFile file: keyPath, text: decoded
-
-        // Verify file was created
-        def fileExists = steps.sh(script: "test -f ${keyPath} && echo 'EXISTS' || echo 'NOT_EXISTS'", returnStdout: true).trim()
-
-        if (fileExists != 'EXISTS') {
-            steps.sh "ls -la ${sshDir} || echo 'Directory listing failed'"
-            error "Failed to create SSH key file at ${keyPath}"
-        }
-
-        // Set proper permissions for private key
-        steps.sh "chmod 600 ${keyPath}"
-
-        // Generate public key from private key
-        // Strip extension (e.g., .pem) and add .pub
-        def keyBaseName = config.keyName.replaceAll(/\.[^.]+$/, '')
-        def pubKeyPath = "${sshDir}/${keyBaseName}.pub"
-
-        if (debug) {
-            steps.echo "=== Public Key Generation ==="
-            steps.echo "Key base name: ${keyBaseName}"
-            steps.echo "Public key path: ${pubKeyPath}"
-        }
-
-        steps.sh "ssh-keygen -y -f ${keyPath} > ${pubKeyPath}"
-
-        // Verify public key was created
-        def pubFileExists = steps.sh(script: "test -f ${pubKeyPath} && echo 'EXISTS' || echo 'NOT_EXISTS'", returnStdout: true).trim()
-
-        if (pubFileExists != 'EXISTS') {
-            steps.sh "ls -la ${sshDir} || echo 'Directory listing failed'"
-            error "Failed to create public key file at ${pubKeyPath}"
-        }
-
-        steps.sh "chmod 644 ${pubKeyPath}"
 
         steps.echo "SSH key pair written successfully: ${keyPath} and ${pubKeyPath}"
         return keyPath
