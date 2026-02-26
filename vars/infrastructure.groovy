@@ -1,7 +1,36 @@
-// High-level infrastructure helpers for Jenkins pipelines
+/**
+ * infrastructure.groovy
+ *
+ * High-level infrastructure helpers for Jenkins pipelines.
+ *
+ * Provides utilities for writing configuration files, managing SSH key pairs,
+ * generating workspace names, substituting environment variables into content,
+ * and managing workspace artifacts.
+ *
+ * Debug logging
+ * -------------
+ * Several functions emit extra diagnostic output when debug mode is active.
+ * Enable it per-call via the `debug: true` parameter, or globally for a job
+ * by setting the environment variable INFRASTRUCTURE_DEBUG=true.
+ */
 
-// Write configuration file with variable substitutions
-// [ path: string, content: string, substitutions?: Map ]
+/**
+ * Write a configuration file to disk, optionally substituting placeholder
+ * variables in the content before writing.
+ *
+ * Parameters:
+ *   path          (String, required) - Destination file path.
+ *   content       (String, required) - File content, may contain ${VAR} placeholders.
+ *   substitutions (Map,    optional) - Map of placeholder name → replacement value.
+ *                                      Replaces every occurrence of ${KEY} in content.
+ *
+ * Example:
+ *   infrastructure.writeConfig(
+ *       path: 'config/cattle.yaml',
+ *       content: 'host: ${RANCHER_HOST}\ntoken: ${TOKEN}',
+ *       substitutions: [RANCHER_HOST: env.RANCHER_URL, TOKEN: env.API_TOKEN]
+ *   )
+ */
 def writeConfig(Map config) {
     if (!(config.path && config.content)) {
         error 'Path and content must be provided.'
@@ -30,8 +59,29 @@ def writeConfig(Map config) {
     }
 }
 
-// Decode and write SSH key from base64, and generate public key
-// [ keyContent: string, keyName: string, dir?: string ]
+/**
+ * Decode a base64-encoded SSH private key, write it to disk, derive the
+ * corresponding public key via ssh-keygen, and set correct file permissions.
+ *
+ * Returns the path of the written private key file.
+ *
+ * Parameters:
+ *   keyContent (String,  required) - Base64-encoded private key content
+ *                                    (e.g. from a Jenkins secret credential).
+ *   keyName    (String,  required) - Filename for the private key (e.g. id_rsa.pem).
+ *                                    The public key is written alongside it as
+ *                                    <basename>.pub.
+ *   dir        (String,  optional) - Directory to write keys into. Defaults to '.ssh'.
+ *   debug      (Boolean, optional) - Emit extra path/directory diagnostics.
+ *                                    Also enabled by INFRASTRUCTURE_DEBUG=true.
+ *
+ * Example:
+ *   def keyPath = infrastructure.writeSshKey(
+ *       keyContent: env.AWS_SSH_PEM_KEY,
+ *       keyName:    env.AWS_SSH_PEM_KEY_NAME,
+ *       dir:        '.ssh'
+ *   )
+ */
 def writeSshKey(Map config) {
     if (!(config.keyContent && config.keyName)) {
         error 'SSH key content and name must be provided.'
@@ -39,28 +89,79 @@ def writeSshKey(Map config) {
 
     def sshDir = config.dir ?: '.ssh'
 
+    // Validate inputs to prevent shell injection via interpolated paths
+    if (!config.keyName.matches(/[a-zA-Z0-9._-]+/)) {
+        error "SSH key name contains invalid characters (allowed: alphanumeric, dot, underscore, hyphen): ${config.keyName}"
+    }
+    if (!sshDir.matches(/[a-zA-Z0-9._\/-]+/)) {
+        error "SSH directory path contains invalid characters (allowed: alphanumeric, dot, underscore, hyphen, slash): ${sshDir}"
+    }
+
     steps.echo "Writing SSH key: ${config.keyName}"
 
+    String keyPath = "${sshDir}/${config.keyName}"
+    String keyBaseName = config.keyName.replaceAll(/\.[^.]+$/, '')
+    String pubKeyPath = "${sshDir}/${keyBaseName}.pub"
+    boolean debug = config.debug ?: (env.INFRASTRUCTURE_DEBUG == 'true')
+
     try {
-        // Create SSH directory if it doesn't exist
-        steps.sh "mkdir -p ${sshDir}"
+        steps.withEnv([
+            "SSH_DIR=${sshDir}",
+            "KEY_PATH=${keyPath}",
+            "PUB_KEY_PATH=${pubKeyPath}",
+        ]) {
+            // Create SSH directory if it doesn't exist
+            steps.sh 'mkdir -p "$SSH_DIR"'
 
-        // Decode base64 key content
-        def decoded = new String(config.keyContent.decodeBase64())
+            // Decode base64 key content and write private key file
+            String decoded = new String(config.keyContent.decodeBase64())
 
-        // Write private key file
-        def keyPath = "${sshDir}/${config.keyName}"
-        steps.writeFile file: keyPath, text: decoded
+            if (debug) {
+                steps.echo '=== SSH Key Configuration ==='
+                steps.echo "SSH directory: ${sshDir}"
+                steps.echo "Key name: ${config.keyName}"
+                steps.echo "Full key path: ${keyPath}"
+                steps.echo "Current working directory: ${pwd()}"
+            }
 
-        // Set proper permissions for private key
-        steps.sh "chmod 600 ${keyPath}"
+            steps.writeFile file: keyPath, text: decoded
 
-        // Generate public key from private key
-        // Strip extension (e.g., .pem) and add .pub
-        def keyBaseName = config.keyName.replaceAll(/\.[^.]+$/, '')
-        def pubKeyPath = "${sshDir}/${keyBaseName}.pub"
-        steps.sh "ssh-keygen -y -f ${keyPath} > ${pubKeyPath}"
-        steps.sh "chmod 644 ${pubKeyPath}"
+            // Verify file was created
+            String fileExists = steps.sh(
+                script: 'test -f "$KEY_PATH" && echo EXISTS || echo NOT_EXISTS',
+                returnStdout: true
+            ).trim()
+
+            if (fileExists != 'EXISTS') {
+                steps.sh 'ls -la "$SSH_DIR" || echo \'Directory listing failed\''
+                error "Failed to create SSH key file at ${keyPath}"
+            }
+
+            // Set proper permissions for private key
+            steps.sh 'chmod 600 "$KEY_PATH"'
+
+            if (debug) {
+                steps.echo '=== Public Key Generation ==='
+                steps.echo "Key base name: ${keyBaseName}"
+                steps.echo "Public key path: ${pubKeyPath}"
+            }
+
+            // Generate public key from private key
+            steps.sh 'ssh-keygen -y -f "$KEY_PATH" > "$PUB_KEY_PATH"'
+
+            // Verify public key was created
+            String pubFileExists = steps.sh(
+                script: 'test -f "$PUB_KEY_PATH" && echo EXISTS || echo NOT_EXISTS',
+                returnStdout: true
+            ).trim()
+
+            if (pubFileExists != 'EXISTS') {
+                steps.sh 'ls -la "$SSH_DIR" || echo \'Directory listing failed\''
+                error "Failed to create public key file at ${pubKeyPath}"
+            }
+
+            steps.sh 'chmod 644 "$PUB_KEY_PATH"'
+        }
 
         steps.echo "SSH key pair written successfully: ${keyPath} and ${pubKeyPath}"
         return keyPath
@@ -69,8 +170,28 @@ def writeSshKey(Map config) {
     }
 }
 
-// Generate unique workspace name
-// [ prefix?: string, suffix?: string, includeTimestamp?: bool ]
+/**
+ * Generate a unique workspace name suitable for use as a Terraform workspace
+ * identifier (alphanumeric, hyphens, and underscores only).
+ *
+ * The name is composed of: <prefix>_<BUILD_NUMBER>[_<suffix>][_<timestamp>]
+ *
+ * Parameters:
+ *   prefix           (String,  optional) - Name prefix. Defaults to 'jenkins_workspace'.
+ *   suffix           (String,  optional) - Additional label appended after the build
+ *                                          number. Special characters are replaced with
+ *                                          hyphens and leading/trailing hyphens stripped.
+ *   includeTimestamp (Boolean, optional) - Append a yyyyMMddHHmmss timestamp.
+ *                                          Defaults to true.
+ *
+ * Example:
+ *   def wsName = infrastructure.generateWorkspaceName(
+ *       prefix: 'rancher_airgap',
+ *       suffix: env.CLUSTER_TYPE,
+ *       includeTimestamp: true
+ *   )
+ *   // → rancher_airgap_42_rke2_20260223141500
+ */
 def generateWorkspaceName(Map config = [:]) {
     def prefix = config.prefix ?: 'jenkins_workspace'
     def buildNumber = env.BUILD_NUMBER ?: 'unknown'
@@ -95,8 +216,25 @@ def generateWorkspaceName(Map config = [:]) {
     return "${prefix}_${buildNumber}${sanitizedSuffix}"
 }
 
-// Parse YAML-like content and apply environment variable substitutions
-// [ content: string, envVars: Map ]
+/**
+ * Replace environment variable references inside a string.
+ *
+ * Supports both ${VAR} and $VAR syntax. $VAR is only matched when not
+ * immediately followed by another identifier character, preventing partial
+ * substitution of longer variable names.
+ *
+ * Parameters:
+ *   content (String, required) - Input text containing variable references.
+ *   envVars (Map,    optional) - Map of variable name → replacement value.
+ *
+ * Returns the processed string.
+ *
+ * Example:
+ *   def result = infrastructure.parseAndSubstituteVars(
+ *       content: readFile('template.yaml'),
+ *       envVars: [CLUSTER_NAME: env.CLUSTER_NAME, REGION: env.AWS_REGION]
+ *   )
+ */
 def parseAndSubstituteVars(Map config) {
     if (!config.content) {
         error 'Content must be provided.'
@@ -115,8 +253,15 @@ def parseAndSubstituteVars(Map config) {
     return processedContent
 }
 
-// Create directory structure
-// [ paths: List<String> ]
+/**
+ * Create one or more directories in the workspace.
+ *
+ * Parameters:
+ *   paths (List<String>, required) - List of directory paths to create.
+ *
+ * Example:
+ *   infrastructure.createDirectories(paths: ['.ssh', 'config', 'artifacts'])
+ */
 def createDirectories(Map config) {
     if (!config.paths) {
         error 'Paths must be provided.'
@@ -128,8 +273,20 @@ def createDirectories(Map config) {
     }
 }
 
-// Clean up workspace artifacts
-// [ paths: List<String>, force?: bool ]
+/**
+ * Remove workspace artifacts, swallowing errors for individual paths so that
+ * a single missing path does not abort cleanup of the rest.
+ *
+ * Parameters:
+ *   paths (List<String>, required) - List of file/directory paths to remove.
+ *   force (Boolean,      optional) - Pass -f to rm. Defaults to false.
+ *
+ * Example:
+ *   infrastructure.cleanupArtifacts(
+ *       paths: ['.ssh', 'config/cattle.yaml', 'terraform.tfstate'],
+ *       force: true
+ *   )
+ */
 def cleanupArtifacts(Map config) {
     if (!config.paths) {
         error 'Paths must be provided.'
@@ -149,8 +306,17 @@ def cleanupArtifacts(Map config) {
     }
 }
 
-// Archive workspace name for later use
-// [ workspaceName: string, fileName?: string ]
+/**
+ * Write the workspace name to a file and archive it as a Jenkins build
+ * artifact so that downstream jobs or stages can retrieve it.
+ *
+ * Parameters:
+ *   workspaceName (String, required) - The workspace name string to persist.
+ *   fileName      (String, optional) - Artifact filename. Defaults to 'workspace_name.txt'.
+ *
+ * Example:
+ *   infrastructure.archiveWorkspaceName(workspaceName: wsName)
+ */
 def archiveWorkspaceName(Map config) {
     if (!config.workspaceName) {
         error 'Workspace name must be provided.'
@@ -169,8 +335,17 @@ def archiveWorkspaceName(Map config) {
     }
 }
 
-// Extract archived workspace name
-// [ fileName?: string ]
+/**
+ * Read a previously archived workspace name from a build artifact file.
+ *
+ * Parameters:
+ *   fileName (String, optional) - Artifact filename to read. Defaults to 'workspace_name.txt'.
+ *
+ * Returns the workspace name string (trimmed).
+ *
+ * Example:
+ *   def wsName = infrastructure.getArchivedWorkspaceName()
+ */
 def getArchivedWorkspaceName(Map config = [:]) {
     def fileName = config.fileName ?: 'workspace_name.txt'
 
