@@ -444,7 +444,7 @@ def _goTestCommand(Map test) {
 
     args.add("-timeout=${test.timeout}")
 
-    args.add('-v;')
+    args.add('-v')
 
     return [args, test]
 }
