@@ -70,7 +70,8 @@ def writeConfig(Map config) {
  *                                    (e.g. from a Jenkins secret credential).
  *   keyName    (String,  required) - Filename for the private key (e.g. id_rsa.pem).
  *                                    The public key is written alongside it as
- *                                    <basename>.pub.
+ *                                    <basename>.pub unless pubKeyPath is provided.
+ *   pubKeyName (String,  optional) - If provided, write the public key to this filename instead of <basename>.pub.
  *   dir        (String,  optional) - Directory to write keys into. Defaults to '.ssh'.
  *   debug      (Boolean, optional) - Emit extra path/directory diagnostics.
  *                                    Also enabled by INFRASTRUCTURE_DEBUG=true.
@@ -93,6 +94,9 @@ def writeSshKey(Map config) {
     if (!config.keyName.matches(/[a-zA-Z0-9._-]+/)) {
         error "SSH key name contains invalid characters (allowed: alphanumeric, dot, underscore, hyphen): ${config.keyName}"
     }
+    if (config.pubKeyName && !config.pubKeyName.matches(/[a-zA-Z0-9._-]+/)) {
+        error "Public key name contains invalid characters (allowed: alphanumeric, dot, underscore, hyphen): ${config.pubKeyName}"
+    }
     if (!sshDir.matches(/[a-zA-Z0-9._\/-]+/)) {
         error "SSH directory path contains invalid characters (allowed: alphanumeric, dot, underscore, hyphen, slash): ${sshDir}"
     }
@@ -101,7 +105,8 @@ def writeSshKey(Map config) {
 
     String keyPath = "${sshDir}/${config.keyName}"
     String keyBaseName = config.keyName.replaceAll(/\.[^.]+$/, '')
-    String pubKeyPath = "${sshDir}/${keyBaseName}.pub"
+    String resolvedPubKeyName = config.pubKeyName ?: "${keyBaseName}.pub"
+    String pubKeyPath = "${sshDir}/${resolvedPubKeyName}"
     boolean debug = config.debug ?: (env.INFRASTRUCTURE_DEBUG == 'true')
 
     try {
@@ -251,6 +256,34 @@ def parseAndSubstituteVars(Map config) {
     }
 
     return processedContent
+}
+
+/**
+ * Extract the directory path from a file path.
+ *
+ * Given a file path, returns the directory containing the file by extracting
+ * everything up to (but not including) the final path separator.
+ *
+ * Parameters:
+ *   filePath (String, required) - The file path to extract the directory from.
+ *
+ * Returns the directory path (everything before the last '/').
+ *
+ * Example:
+ *   def dir = infrastructure.getDirectory(filePath: 'ansible/k3s/default/site.yml')
+ *   // → 'ansible/k3s/default'
+ */
+def getDirectory(Map config) {
+    if (!config.filePath) {
+        error 'File path must be provided.'
+    }
+
+    def lastSlashIndex = config.filePath.lastIndexOf('/')
+    if (lastSlashIndex == -1) {
+        return '.'
+    }
+
+    return config.filePath.substring(0, lastSlashIndex)
 }
 
 /**

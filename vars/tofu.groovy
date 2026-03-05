@@ -61,7 +61,7 @@ def _runInContainer(String command, Map envVars = [:], boolean returnStdout = fa
 
     def config = new config()
     def platform = config.getDockerPlatform()
-    def dockerCommand = "docker run --rm --platform ${platform} ${envArgs} -v ${workspace}:/workspace -w /workspace ${_getImage()} sh -c \"${command}\""
+    def dockerCommand = "docker run --rm --platform ${platform} ${envArgs} -v ${workspace}:/workspace -w /workspace --entrypoint \"\" ${_getImage()} sh -c \"${command}\""
 
     if (returnStdout) {
         return steps.sh(script: dockerCommand, returnStdout: true).trim()
