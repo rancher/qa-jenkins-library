@@ -70,7 +70,7 @@ def writeConfig(Map config) {
  *                                    (e.g. from a Jenkins secret credential).
  *   keyName    (String,  required) - Filename for the private key (e.g. id_rsa.pem).
  *                                    The public key is written alongside it as
- *                                    <basename>.pub unless pubKeyPath is provided.
+ *                                    <basename>.pub unless pubKeyName is provided.
  *   pubKeyName (String,  optional) - If provided, write the public key to this filename instead of <basename>.pub.
  *   dir        (String,  optional) - Directory to write keys into. Defaults to '.ssh'.
  *   debug      (Boolean, optional) - Emit extra path/directory diagnostics.

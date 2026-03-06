@@ -505,8 +505,7 @@ def remove(List<Map<String, Object>> containers) {
  * Parameters:
  *   name         (String,         required) - Container name (--name).
  *   image        (String,         required) - Docker image to run.
- *   command      (String,         required) - Command to execute in the container
- *                                             (passed to `sh -c`).
+ *   command      (String,         required) - Command to execute in the container.
  *   volumes      (List<String>,   optional) - Volume mounts in the format 'host:container'.
  *                                             Empty or omitted if no volumes needed.
  *   envVars      (Map,            optional) - Environment variables as key/value pairs
@@ -518,8 +517,8 @@ def remove(List<Map<String, Object>> containers) {
  * Example:
  *   container.runCommand(
  *       name:        'my-build-container',
- *       image:       'maxross/tofu-runner:latest',
- *       command:     'tofu init && tofu apply -auto-approve',
+ *       image:       'ranchertest/infra-runner:latest',
+ *       command:     'sh -c "tofu init && tofu apply -auto-approve"',
  *       volumes:     ['/home/user/project:/tofu', '~/.ssh:/.ssh'],
  *       envVars:     [CLUSTER_NAME: 'my-cluster', REGION: 'us-east-1'],
  *       workingDir:  '/tofu'
@@ -535,7 +534,7 @@ def runCommand(Map config) {
     // Add environment variables if provided
     if (config.envVars && config.envVars.size() > 0) {
         config.envVars.each { key, value ->
-            args.addAll(['-e', "${key}=${value}"])
+            args.addAll(['-e', "${key}=${_wrapInDoubleQuotes(value)}"])
         }
     }
 
