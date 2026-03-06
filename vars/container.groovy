@@ -503,7 +503,7 @@ def remove(List<Map<String, Object>> containers) {
  * is removed after execution (via --rm flag).
  *
  * Parameters:
- *   name         (String,         required) - Container name (--name).
+ *   name         (String,         optional) - Container name (--name).
  *   image        (String,         required) - Docker image to run.
  *   command      (String,         required) - Command to execute in the container.
  *   volumes      (List<String>,   optional) - Volume mounts in the format 'host:container'.
@@ -525,11 +525,17 @@ def remove(List<Map<String, Object>> containers) {
  *   )
  */
 def runCommand(Map config) {
-    if (!(config.name && config.image && config.command)) {
-        error "Parameters 'name', 'image', and 'command' are required."
+    if (!(config.image && config.command)) {
+        error "Parameters 'image' and 'command' are required."
     }
 
-    def args = ['docker', 'run', '--rm', '--name', config.name]
+    def globalConfig = new config()
+    def platform = globalConfig.getDockerPlatform()
+    def args = ['docker', 'run', '--rm', '--platform', platform]
+
+    if (config.name) {
+        args.addAll(['--name', config.name])
+    }
 
     // Add environment variables if provided
     if (config.envVars && config.envVars.size() > 0) {
