@@ -68,6 +68,33 @@ def getDefaultConfig() {
             defaultDir: env.DEFAULT_DIR ?: '.',
             sshDir: env.SSH_DIR ?: '.ssh',
             validationDir: env.VALIDATION_DIR ?: 'validation'
+        ],
+
+        // Repository configuration
+        repositories: [
+            tests: [
+                url:    env.RANCHER_TESTS_REPO_URL       ?: 'https://github.com/rancher/tests.git',
+                branch: env.RANCHER_TESTS_REPO_BRANCH    ?: 'main',
+                target: env.RANCHER_TESTS_REPO_TARGET     ?: 'tests'
+            ],
+            qaInfraAutomation: [
+                url:    env.QA_INFRA_AUTOMATION_REPO_URL    ?: 'https://github.com/rancher/qa-infra-automation.git',
+                branch: env.QA_INFRA_AUTOMATION_REPO_BRANCH ?: 'main',
+                target: env.QA_INFRA_AUTOMATION_REPO_TARGET  ?: 'qa-infra-automation'
+            ]
+        ],
+
+        // S3 artifact configuration
+        s3: [
+            bucket:  env.S3_ARTIFACT_BUCKET  ?: 'rancher-qa-artifacts',
+            region:  env.S3_ARTIFACT_REGION  ?: 'us-east-1',
+            profile: env.S3_ARTIFACT_PROFILE ?: 'default',
+            pathPrefix: env.S3_ARTIFACT_PATH_PREFIX ?: 'env'
+        ],
+
+        // Pipeline defaults
+        pipeline: [
+            defaultTimeout: env.PIPELINE_DEFAULT_TIMEOUT ?: '120'
         ]
     ]
 }
@@ -251,4 +278,52 @@ def getUIConfig() {
  */
 def getPathConfig() {
     return getConfig('paths')
+}
+
+/**
+ * Convenience accessor — return the configuration for a named repository.
+ *
+ * Looks up a repository by key under the 'repositories' section. Supported
+ * keys are 'tests' and 'qaInfraAutomation' by default.
+ *
+ * Parameters:
+ *   name (String, required) - Repository key (e.g. 'tests', 'qaInfraAutomation').
+ *
+ * Returns a Map with keys: url, branch, target.
+ *
+ * Example:
+ *   def repo = new config().getRepositoryConfig('tests')
+ *   // repo.url    → 'https://github.com/rancher/tests.git'
+ *   // repo.branch → 'main'
+ *   // repo.target → 'tests'
+ */
+def getRepositoryConfig(String name) {
+    def repoConfig = getConfig('repositories')
+    return repoConfig[name] ?: [:]
+}
+
+/**
+ * Convenience accessor — return the full S3 artifact configuration section.
+ *
+ * Returns a Map with keys: bucket, region, profile, pathPrefix.
+ *
+ * Example:
+ *   def s3 = new config().getS3Config()
+ *   def uri = "s3://${s3.bucket}/${s3.pathPrefix}/${workspaceName}/${s3Key}"
+ */
+def getS3Config() {
+    return getConfig('s3')
+}
+
+/**
+ * Convenience accessor — return the full pipeline defaults configuration section.
+ *
+ * Returns a Map with keys: defaultTimeout.
+ *
+ * Example:
+ *   def cfg = new config().getPipelineConfig()
+ *   timeout(time: cfg.defaultTimeout.toInteger(), unit: 'MINUTES') { ... }
+ */
+def getPipelineConfig() {
+    return getConfig('pipeline')
 }
