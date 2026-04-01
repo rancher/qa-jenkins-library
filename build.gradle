@@ -8,6 +8,10 @@ repositories {
     maven { url 'https://repo.jenkins-ci.org/public/' }
 }
 
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 dependencies {
     implementation 'org.codehaus.groovy:groovy-all:3.0.24'
 
