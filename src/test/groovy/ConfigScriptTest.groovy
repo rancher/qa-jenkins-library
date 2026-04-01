@@ -31,7 +31,7 @@ class ConfigScriptTest extends BasePipelineTest {
 
         assertThat(cfg).containsKeys(
             'docker', 'testing', 'naming', 'ui', 'paths',
-            'repositories', 's3', 'pipeline'
+            'repositories'
         )
     }
 
@@ -89,38 +89,17 @@ class ConfigScriptTest extends BasePipelineTest {
     }
 
     @Test
-    @DisplayName('getDefaultConfig s3 section has required keys')
-    void getDefaultConfig_s3Section() {
-        def s3 = script.getDefaultConfig().s3
-
-        assertThat(s3.bucket).isEqualTo('rancher-qa-artifacts')
-        assertThat(s3.region).isEqualTo('us-east-1')
-        assertThat(s3.profile).isEqualTo('default')
-        assertThat(s3.pathPrefix).isEqualTo('env')
-    }
-
-    @Test
-    @DisplayName('getDefaultConfig pipeline section has defaultTimeout')
-    void getDefaultConfig_pipelineSection() {
-        def pipeline = script.getDefaultConfig().pipeline
-
-        assertThat(pipeline.defaultTimeout).isEqualTo('120')
-    }
-
-    @Test
     @DisplayName('getDefaultConfig reads environment variable overrides')
     void getDefaultConfig_envOverrides() {
         // JenkinsPipelineUnit exposes env as a LinkedHashMap
         def envMap = binding.getVariable('env') as Map
         envMap['DOCKER_PLATFORM'] = 'linux/arm64'
         envMap['TEST_DEFAULT_TAGS'] = 'smoke'
-        envMap['S3_ARTIFACT_BUCKET'] = 'custom-bucket'
 
         def cfg = script.getDefaultConfig()
 
         assertThat(cfg.docker.platform).isEqualTo('linux/arm64')
         assertThat(cfg.testing.defaultTags).isEqualTo('smoke')
-        assertThat(cfg.s3.bucket).isEqualTo('custom-bucket')
     }
 
     // ── getConfig ─────────────────────────────────────────────────────
@@ -345,25 +324,6 @@ class ConfigScriptTest extends BasePipelineTest {
         def repo = script.getRepositoryConfig('nonexistent')
 
         assertThat(repo).isEmpty()
-    }
-
-    @Test
-    @DisplayName('getS3Config returns full s3 section')
-    void getS3Config_returnsSection() {
-        def s3 = script.getS3Config()
-
-        assertThat(s3.bucket).isEqualTo('rancher-qa-artifacts')
-        assertThat(s3.region).isEqualTo('us-east-1')
-        assertThat(s3.profile).isEqualTo('default')
-        assertThat(s3.pathPrefix).isEqualTo('env')
-    }
-
-    @Test
-    @DisplayName('getPipelineConfig returns full pipeline section')
-    void getPipelineConfig_returnsSection() {
-        def pipeline = script.getPipelineConfig()
-
-        assertThat(pipeline.defaultTimeout).isEqualTo('120')
     }
 
     // ── validateConfig ────────────────────────────────────────────────
