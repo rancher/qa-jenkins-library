@@ -494,3 +494,84 @@ def remove(List<Map<String, Object>> containers) {
         }
     }
 }
+
+/**
+ * Run a Docker container with a command, handling volumes and cleanup.
+ *
+ * Executes `docker run` with the specified image and command. Volumes,
+ * environment variables, and working directory are optional. The container
+ * is removed after execution (via --rm flag).
+ *
+ * Parameters:
+ *   name         (String,         optional) - Container name (--name).
+ *   image        (String,         required) - Docker image to run.
+ *   command      (String,         required) - Command to execute in the container.
+ *   volumes      (List<String>,   optional) - Volume mounts in the format 'host:container'.
+ *                                             Empty or omitted if no volumes needed.
+ *   envVars      (Map,            optional) - Environment variables as key/value pairs
+ *                                             (passed with -e KEY=VALUE).
+ *   workingDir   (String,         optional) - Working directory inside container (-w).
+ *   debug        (Boolean,        optional) - Print the full docker command before execution.
+ *                                             Defaults to false.
+ *
+ * Example:
+ *   container.runCommand(
+ *       name:        'my-build-container',
+ *       image:       'ranchertest/infra-runner:latest',
+ *       command:     'sh -c "tofu init && tofu apply -auto-approve"',
+ *       volumes:     ['/home/user/project:/tofu', '~/.ssh:/.ssh'],
+ *       envVars:     [CLUSTER_NAME: 'my-cluster', REGION: 'us-east-1'],
+ *       workingDir:  '/tofu'
+ *   )
+ */
+def runCommand(Map config) {
+    if (!(config.image && config.command)) {
+        error "Parameters 'image' and 'command' are required."
+    }
+
+    def globalConfig = new config()
+    def platform = globalConfig.getDockerPlatform()
+    def args = ['docker', 'run', '--rm', '--platform', platform]
+
+    if (config.name) {
+        args.addAll(['--name', config.name])
+    }
+
+    // Add environment variables if provided
+    if (config.envVars && config.envVars.size() > 0) {
+        config.envVars.each { key, value ->
+            args.addAll(['-e', "${key}=${_wrapInDoubleQuotes(value)}"])
+        }
+    }
+
+    // Add volumes if provided
+    if (config.volumes && config.volumes.size() > 0) {
+        config.volumes.each { volume ->
+            args.addAll(['-v', volume])
+        }
+    }
+
+    // Add working directory if provided
+    if (config.workingDir) {
+        args.addAll(['-w', config.workingDir])
+    }
+
+    // Add image and command
+    args.addAll([config.image, config.command])
+
+    def fullCommand = args.join(' ')
+
+    if (config.debug == true) {
+        steps.echo "=== Docker Command ==="
+        steps.echo fullCommand
+        steps.echo "=== End Docker Command ==="
+    }
+
+    try {
+        steps.sh(script: fullCommand)
+    } catch (e) {
+        steps.echo "Docker run failed: ${e.message}"
+        throw e
+    }
+}
+
