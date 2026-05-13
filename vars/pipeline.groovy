@@ -247,11 +247,15 @@ def standardCredentialLoader(String targetEnv, List<String> additional = [], Clo
  * Airgap infrastructure pipeline template.
  *
  * Orchestrates the full lifecycle: checkout → tofu provision → custom body →
- * teardown (always runs in finally block). The body closure receives the tofu
- * outputs as its parameter for further processing.
+ * optional teardown. The body closure receives the tofu outputs as its parameter
+ * for further processing.
  *
- * This template ensures infrastructure is always torn down even when the body
- * fails, preventing orphaned cloud resources.
+ * Teardown behavior:
+ *   - On body failure: teardown runs when destroyOnFailure is true (default).
+ *   - On success: teardown only runs when destroyAfterSuccess is explicitly set.
+ *
+ * Infrastructure is NOT automatically torn down on success by default, allowing
+ * callers to interact with provisioned resources after the pipeline body completes.
  *
  * Parameters:
  *   params        (Map,     required) - Pipeline parameters from resolvePipelineParams().
@@ -265,6 +269,8 @@ def standardCredentialLoader(String targetEnv, List<String> additional = [], Clo
  *     varFile           (String)  - .tfvars file.
  *   destroyOnFailure (Boolean, optional) - Tear down on body failure.
  *                                           Defaults to true.
+ *   destroyAfterSuccess (Boolean, optional) - Tear down after successful body.
+ *                                             Defaults to false (infra preserved).
  *   body          (Closure, required) - Steps to run after provision.
  *                                      Receives a Map with 'outputs' key.
  *
@@ -377,7 +383,8 @@ def airgapInfraPipeline(Map config, Closure body) {
  *     tags     (String, optional) - Build tags.
  *     timeout  (String, optional) - Test timeout.
  *   destroyOnFailure (Boolean, optional) - Defaults to true.
- *   destroyAfterTests (Boolean, optional) - Defaults to false.
+ *   destroyAfterTests (Boolean, optional) - Tear down infra after tests complete.
+ *                                           Defaults to false (infra preserved for inspection).
  *
  * Returns the test result Map from container.run().
  *

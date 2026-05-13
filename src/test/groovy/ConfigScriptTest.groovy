@@ -95,7 +95,6 @@ class ConfigScriptTest extends BasePipelineTest {
 
         assertThat(s3.bucket).isEqualTo('rancher-qa-artifacts')
         assertThat(s3.region).isEqualTo('us-east-1')
-        assertThat(s3.profile).isEqualTo('default')
         assertThat(s3.pathPrefix).isEqualTo('env')
     }
 
@@ -354,7 +353,6 @@ class ConfigScriptTest extends BasePipelineTest {
 
         assertThat(s3.bucket).isEqualTo('rancher-qa-artifacts')
         assertThat(s3.region).isEqualTo('us-east-1')
-        assertThat(s3.profile).isEqualTo('default')
         assertThat(s3.pathPrefix).isEqualTo('env')
     }
 

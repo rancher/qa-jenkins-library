@@ -46,8 +46,8 @@ def _getImage() {
  * Internal helper — run an arbitrary shell command inside the infra-tools
  * Docker container, mounting the current workspace at /workspace.
  *
- * AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) are always
- * forwarded via -e flags from the calling withCredentials block. Any
+ * AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN)
+ * are always forwarded via -e flags from the calling withCredentials block. Any
  * additional key/value pairs in envVars are appended as -e KEY='VALUE'.
  *
  * Parameters:
@@ -64,7 +64,7 @@ def _runInContainer(String command, Map envVars = [:], boolean returnStdout = fa
     def workspace = steps.pwd()
 
     // Build environment variable arguments
-    def envArgs = "-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY"
+    def envArgs = "-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN"
     if (envVars) {
         envArgs += " " + envVars.collect { k, v -> "-e ${k}='${v}'" }.join(' ')
     }
@@ -248,7 +248,7 @@ def deleteArtifact(Map params) {
 
     steps.echo "Deleting ${s3Uri}"
 
-    def command = "aws s3 rm ${s3Uri} --region ${region} || true"
+    def command = "aws s3 rm ${s3Uri} --region ${region}"
     def status = _runInContainer(command)
 
     if (status != 0) {

@@ -88,7 +88,6 @@ def getDefaultConfig() {
         s3: [
             bucket:  env.S3_ARTIFACT_BUCKET  ?: 'rancher-qa-artifacts',
             region:  env.S3_ARTIFACT_REGION  ?: 'us-east-1',
-            profile: env.S3_ARTIFACT_PROFILE ?: 'default',
             pathPrefix: env.S3_ARTIFACT_PATH_PREFIX ?: 'env'
         ],
 
@@ -305,7 +304,7 @@ def getRepositoryConfig(String name) {
 /**
  * Convenience accessor — return the full S3 artifact configuration section.
  *
- * Returns a Map with keys: bucket, region, profile, pathPrefix.
+ * Returns a Map with keys: bucket, region, pathPrefix.
  *
  * Example:
  *   def s3 = new config().getS3Config()

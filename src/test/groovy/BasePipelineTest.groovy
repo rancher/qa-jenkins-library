@@ -1,4 +1,4 @@
-import com.lesfurets.jenkins.unit.BasePipelineTest
+import com.lesfurets.jenkins.unit.BasePipelineTest as JenkinsBasePipelineTest
 import org.junit.jupiter.api.BeforeEach
 
 /**
@@ -8,7 +8,7 @@ import org.junit.jupiter.api.BeforeEach
  * mocked Jenkins runtime (steps, env, etc.) and configures the
  * library source path to point at the vars/ directory.
  */
-class BasePipelineTest extends BasePipelineTest {
+class BasePipelineTest extends JenkinsBasePipelineTest {
 
     @BeforeEach
     void setUp() {

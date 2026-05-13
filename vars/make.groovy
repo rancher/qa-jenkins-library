@@ -9,7 +9,8 @@
  * the container is set to the specified project directory.
  *
  * AWS credentials are optionally forwarded from the calling withCredentials
- * block via -e AWS_ACCESS_KEY_ID and -e AWS_SECRET_ACCESS_KEY.
+ * block via -e AWS_ACCESS_KEY_ID, -e AWS_SECRET_ACCESS_KEY, and
+ * -e AWS_SESSION_TOKEN (for STS/assume-role setups).
  *
  * Typical workflow
  * ----------------
@@ -44,8 +45,9 @@ def _getImage() {
  *                                      Defaults to false.
  *   mountSsh     (Boolean, optional) - When true, mount .ssh/ at /root/.ssh.
  *                                      Defaults to true.
- *   passAwsCreds (Boolean, optional) - When true, forward AWS_ACCESS_KEY_ID and
- *                                      AWS_SECRET_ACCESS_KEY env vars.
+ *   passAwsCreds (Boolean, optional) - When true, forward AWS_ACCESS_KEY_ID,
+ *                                      AWS_SECRET_ACCESS_KEY, and AWS_SESSION_TOKEN
+ *                                      env vars.
  *                                      Defaults to true.
  *
  * Returns the exit status (int) or trimmed stdout (String) depending on returnStdout.
@@ -59,11 +61,15 @@ def _runInContainer(Map config) {
     if (config.passAwsCreds != false) {
         envArgs.add('-e AWS_ACCESS_KEY_ID')
         envArgs.add('-e AWS_SECRET_ACCESS_KEY')
+        // Forward session token for STS/assume-role setups
+        envArgs.add('-e AWS_SESSION_TOKEN')
     }
 
     envArgs.add('-e ANSIBLE_HOST_KEY_CHECKING=False')
 
     if (config.envVars) {
+        // NOTE: Values come from pipeline definitions and Jenkins credential stores
+        // (controlled by the pipeline author), so shell escaping is not applied.
         envArgs.addAll(config.envVars.collect { k, v -> "-e ${k}='${v}'" })
     }
 
@@ -71,6 +77,8 @@ def _runInContainer(Map config) {
     def volumeArgs = ["-v ${workspace}:/workspace"]
 
     if (config.mountSsh != false) {
+        // Precondition: .ssh directory must already exist (created by
+        // infrastructure.writeSshKey() in the standard pipeline flow).
         volumeArgs.add("-v ${workspace}/.ssh:/root/.ssh")
     }
 

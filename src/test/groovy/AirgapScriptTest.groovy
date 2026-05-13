@@ -3,6 +3,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 
 import static org.assertj.core.api.Assertions.assertThat
+import static org.junit.jupiter.api.Assertions.assertThrows
 
 /**
  * Tests for vars/airgap.groovy — orchestration logic tests.
@@ -50,43 +51,31 @@ class AirgapScriptTest extends BasePipelineTest {
     @Test
     @DisplayName('configureAnsible requires sshKey and inventoryVars')
     void configureAnsible_requiresParams() {
-        RuntimeException ex = null
-        try {
+        def ex = assertThrows(RuntimeException.class) {
             script.configureAnsible([:])
-        } catch (RuntimeException e) {
-            ex = e
         }
 
-        assertThat(ex).isNotNull()
-        assertThat((String) ex.message).contains('sshKey and inventoryVars must be provided')
+        assertThat(ex.message).contains('sshKey and inventoryVars must be provided')
     }
 
     @Test
     @DisplayName('configureAnsible fails when only sshKey provided')
     void configureAnsible_requiresInventoryVars() {
-        RuntimeException ex = null
-        try {
+        def ex = assertThrows(RuntimeException.class) {
             script.configureAnsible(sshKey: [content: 'key', name: 'id_rsa'])
-        } catch (RuntimeException e) {
-            ex = e
         }
 
-        assertThat(ex).isNotNull()
-        assertThat((String) ex.message).contains('sshKey and inventoryVars must be provided')
+        assertThat(ex.message).contains('sshKey and inventoryVars must be provided')
     }
 
     @Test
     @DisplayName('configureAnsible fails when only inventoryVars provided')
     void configureAnsible_requiresSshKey() {
-        RuntimeException ex = null
-        try {
+        def ex = assertThrows(RuntimeException.class) {
             script.configureAnsible(inventoryVars: [content: 'yaml', path: 'vars.yml'])
-        } catch (RuntimeException e) {
-            ex = e
         }
 
-        assertThat(ex).isNotNull()
-        assertThat((String) ex.message).contains('sshKey and inventoryVars must be provided')
+        assertThat(ex.message).contains('sshKey and inventoryVars must be provided')
     }
 
     // ── deployRKE2 — parameter validation ─────────────────────────────
@@ -94,29 +83,21 @@ class AirgapScriptTest extends BasePipelineTest {
     @Test
     @DisplayName('deployRKE2 requires dir, inventory, and playbook')
     void deployRKE2_requiresParams() {
-        RuntimeException ex = null
-        try {
+        def ex = assertThrows(RuntimeException.class) {
             script.deployRKE2([:])
-        } catch (RuntimeException e) {
-            ex = e
         }
 
-        assertThat(ex).isNotNull()
-        assertThat((String) ex.message).contains('dir, inventory, and playbook must be provided')
+        assertThat(ex.message).contains('dir, inventory, and playbook must be provided')
     }
 
     @Test
     @DisplayName('deployRKE2 fails when missing playbook')
     void deployRKE2_requiresPlaybook() {
-        RuntimeException ex = null
-        try {
+        def ex = assertThrows(RuntimeException.class) {
             script.deployRKE2(dir: 'ansible/dir', inventory: 'inv.yml')
-        } catch (RuntimeException e) {
-            ex = e
         }
 
-        assertThat(ex).isNotNull()
-        assertThat((String) ex.message).contains('dir, inventory, and playbook must be provided')
+        assertThat(ex.message).contains('dir, inventory, and playbook must be provided')
     }
 
     // ── deployRancher — parameter validation ───────────────────────────
@@ -124,15 +105,11 @@ class AirgapScriptTest extends BasePipelineTest {
     @Test
     @DisplayName('deployRancher requires dir, inventory, and playbook')
     void deployRancher_requiresParams() {
-        RuntimeException ex = null
-        try {
+        def ex = assertThrows(RuntimeException.class) {
             script.deployRancher([:])
-        } catch (RuntimeException e) {
-            ex = e
         }
 
-        assertThat(ex).isNotNull()
-        assertThat((String) ex.message).contains('dir, inventory, and playbook must be provided')
+        assertThat(ex.message).contains('dir, inventory, and playbook must be provided')
     }
 
     // ── configureAnsible — SSH key path injection logic ────────────────
@@ -147,10 +124,10 @@ class AirgapScriptTest extends BasePipelineTest {
         def sshKeyPath = "/root/.ssh/${keyName}"
 
         def processed = content
-        if (!processed.contains('ssh_private_key_file:')) {
+        if (!(processed =~ /(?m)^\s*ssh_private_key_file\s*:/)) {
             processed += "\nssh_private_key_file: ${sshKeyPath}"
         }
-        if (!processed.contains('ansible_ssh_private_key_file:')) {
+        if (!(processed =~ /(?m)^\s*ansible_ssh_private_key_file\s*:/)) {
             processed += "\nansible_ssh_private_key_file: ${sshKeyPath}"
         }
 
@@ -167,10 +144,10 @@ class AirgapScriptTest extends BasePipelineTest {
         def sshKeyPath = "/root/.ssh/${keyName}"
 
         def processed = content
-        if (!processed.contains('ssh_private_key_file:')) {
+        if (!(processed =~ /(?m)^\s*ssh_private_key_file\s*:/)) {
             processed += "\nssh_private_key_file: ${sshKeyPath}"
         }
-        if (!processed.contains('ansible_ssh_private_key_file:')) {
+        if (!(processed =~ /(?m)^\s*ansible_ssh_private_key_file\s*:/)) {
             processed += "\nansible_ssh_private_key_file: ${sshKeyPath}"
         }
 
@@ -190,10 +167,10 @@ class AirgapScriptTest extends BasePipelineTest {
         def sshKeyPath = "/root/.ssh/${keyName}"
 
         def processed = content
-        if (!processed.contains('ssh_private_key_file:')) {
+        if (!(processed =~ /(?m)^\s*ssh_private_key_file\s*:/)) {
             processed += "\nssh_private_key_file: ${sshKeyPath}"
         }
-        if (!processed.contains('ansible_ssh_private_key_file:')) {
+        if (!(processed =~ /(?m)^\s*ansible_ssh_private_key_file\s*:/)) {
             processed += "\nansible_ssh_private_key_file: ${sshKeyPath}"
         }
 
@@ -203,8 +180,8 @@ class AirgapScriptTest extends BasePipelineTest {
         assertThat(ansibleCount).isEqualTo(1)
         assertThat(processed).contains('ansible_ssh_private_key_file: /existing')
 
-        // Note: ssh_private_key_file is NOT added either, because the check
-        // for 'ssh_private_key_file:' matches the existing 'ansible_ssh_private_key_file:'
-        // line as a substring. This is a known quirk of the substring check.
+        // With the line-anchored regex, ssh_private_key_file IS correctly
+        // added even when ansible_ssh_private_key_file is already present.
+        assertThat(processed).contains('ssh_private_key_file: /root/.ssh/key.pem')
     }
 }

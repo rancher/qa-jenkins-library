@@ -161,6 +161,11 @@ def configureAnsible(Map config) {
         dir:        config.sshKey.dir ?: '.ssh'
     )
 
+    // Validate key file was written
+    if (!steps.fileExists(keyPath)) {
+        error "SSH key file was not created at expected path: ${keyPath}"
+    }
+
     // 2. Process and write inventory variables
     def processedContent = config.inventoryVars.content
     if (config.inventoryVars.envVars) {
@@ -171,11 +176,13 @@ def configureAnsible(Map config) {
     }
 
     // Inject SSH key path if not already present
+    // Use line-anchored regex to avoid substring false positives
+    // (e.g. 'ssh_private_key_file:' must not match 'ansible_ssh_private_key_file:')
     def sshKeyPath = "/root/.ssh/${config.sshKey.name}"
-    if (!processedContent.contains('ssh_private_key_file:')) {
+    if (!(processedContent =~ /(?m)^\s*ssh_private_key_file\s*:/)) {
         processedContent += "\nssh_private_key_file: ${sshKeyPath}"
     }
-    if (!processedContent.contains('ansible_ssh_private_key_file:')) {
+    if (!(processedContent =~ /(?m)^\s*ansible_ssh_private_key_file\s*:/)) {
         processedContent += "\nansible_ssh_private_key_file: ${sshKeyPath}"
     }
 
