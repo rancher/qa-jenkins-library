@@ -131,6 +131,37 @@ pipeline {
 }
 ```
 
+## Running Tests
+
+The project uses [Gradle](https://gradle.org/) with [JenkinsPipelineUnit](https://github.com/jenkinsci/JenkinsPipelineUnit) for unit testing shared library functions.
+
+### Prerequisites
+
+- **Java 17+** (OpenJDK or Oracle JDK)
+- No separate Gradle installation needed — the wrapper handles it
+
+### Running
+
+```bash
+# Run all tests
+./gradlew clean test
+
+# Run a specific test class
+./gradlew test --tests AirgapScriptTest
+```
+
+### Test structure
+
+Tests live in `src/test/groovy/` and cover:
+- Parameter validation for library functions
+- Logic correctness (e.g., SSH key injection, config resolution)
+- Docker command construction
+- Shell command building
+
+Tests use [JenkinsPipelineUnit](https://github.com/jenkinsci/JenkinsPipelineUnit) to mock the Jenkins runtime (`steps`, `env`, `scm`) so that library scripts can be tested without a real Jenkins instance.
+
+> **Note:** Functions that directly call Jenkins DSL steps (e.g., `checkout()`, `sh()`) or depend on plugins are tested through the JenkinsPipelineUnit mocking layer. This covers parameter validation and command construction but not end-to-end plugin behavior, which must be validated in real pipeline runs.
+
 ## Contributing and Testing Changes
 When you need to add a new function or fix a bug in this shared library, you can test your changes in a real pipeline before merging them. The process involves pointing your project's Jenkinsfile to your specific pull request.
 
