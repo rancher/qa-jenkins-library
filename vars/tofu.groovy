@@ -6,7 +6,7 @@
  * All commands run inside the rancher-infra-tools Docker container so that
  * no OpenTofu installation is required on the Jenkins agent itself. AWS
  * credentials are forwarded from the calling withCredentials block via
- * -e AWS_ACCESS_KEY_ID and -e AWS_SECRET_ACCESS_KEY.
+ * -e AWS_ACCESS_KEY_ID, -e AWS_SECRET_ACCESS_KEY, and -e AWS_SESSION_TOKEN.
  *
  * Typical workflow
  * ----------------
@@ -35,8 +35,8 @@ def _getImage() {
  * Internal helper — run an arbitrary shell command inside the infra-tools
  * container, mounting the current workspace at /workspace.
  *
- * AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) are always
- * forwarded via -e flags; any additional key/value pairs in envVars are
+ * AWS credentials (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN)
+ * are always forwarded via -e flags; any additional key/value pairs in envVars are
  * appended as -e KEY='VALUE' arguments.
  *
  * Parameters:
@@ -54,7 +54,7 @@ def _runInContainer(String command, Map envVars = [:], boolean returnStdout = fa
 
     // Build environment variable arguments
     // AWS credentials will be automatically inherited from withCredentials block
-    def envArgs = "-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY"
+    def envArgs = "-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN"
     if (envVars) {
         envArgs += " " + envVars.collect { k, v -> "-e ${k}='${v}'" }.join(' ')
     }
