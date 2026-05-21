@@ -68,7 +68,21 @@ def getDefaultConfig() {
             defaultDir: env.DEFAULT_DIR ?: '.',
             sshDir: env.SSH_DIR ?: '.ssh',
             validationDir: env.VALIDATION_DIR ?: 'validation'
+        ],
+
+        // Repository configuration
+        repositories: [
+            tests: [
+                url:    env.RANCHER_TESTS_REPO_URL       ?: 'https://github.com/rancher/tests.git',
+                branch: env.RANCHER_TESTS_REPO_BRANCH    ?: 'main',
+                target: env.RANCHER_TESTS_REPO_TARGET     ?: 'tests'
+            ],
+            qaInfraAutomation: [
+                url:    env.QA_INFRA_AUTOMATION_REPO_URL    ?: 'https://github.com/rancher/qa-infra-automation.git',
+                branch: env.QA_INFRA_AUTOMATION_REPO_BRANCH ?: 'main',
+                target: env.QA_INFRA_AUTOMATION_REPO_TARGET  ?: 'qa-infra-automation'
         ]
+    ]
     ]
 }
 
@@ -252,3 +266,26 @@ def getUIConfig() {
 def getPathConfig() {
     return getConfig('paths')
 }
+
+/**
+ * Convenience accessor — return the configuration for a named repository.
+ *
+ * Looks up a repository by key under the 'repositories' section. Supported
+ * keys are 'tests' and 'qaInfraAutomation' by default.
+ *
+ * Parameters:
+ *   name (String, required) - Repository key (e.g. 'tests', 'qaInfraAutomation').
+ *
+ * Returns a Map with keys: url, branch, target.
+ *
+ * Example:
+ *   def repo = new config().getRepositoryConfig('tests')
+ *   // repo.url    → 'https://github.com/rancher/tests.git'
+ *   // repo.branch → 'main'
+ *   // repo.target → 'tests'
+ */
+def getRepositoryConfig(String name) {
+    def repoConfig = getConfig('repositories')
+    return repoConfig[name] ?: [:]
+}
+

@@ -72,3 +72,68 @@ def checkout(Map config) {
 
     return "./${target}"
 }
+
+/**
+ * Check out multiple Git repositories into separate subdirectories within
+ * the Jenkins workspace.
+ *
+ * Unlike checkout(), this does NOT call deleteDir() before cloning, so it is
+ * safe to use when checking out several repositories side-by-side. Each
+ * individual checkout uses the CleanBeforeCheckout extension to ensure the
+ * target directory is in a clean state.
+ *
+ * Parameters:
+ *   repositories (List<Map>, required) - List of repository configuration maps, each with:
+ *     repository (String,  required) - Full HTTPS or SSH URL of the Git repository.
+ *     branch     (String,  optional) - Branch name to check out. Defaults to 'main'.
+ *     target     (String,  required) - Relative subdirectory within the workspace to
+ *                                      clone into.
+ *
+ * Returns a List of target directory paths (e.g. ['./tests', './infra']).
+ *
+ * Example:
+ *   def dirs = project.checkoutMultiple([
+ *       [repository: 'https://github.com/rancher/tests.git',
+ *        branch: 'main', target: 'tests'],
+ *       [repository: 'https://github.com/rancher/qa-infra-automation.git',
+ *        branch: 'main', target: 'infra']
+ *   ])
+ *   // dirs → ['./tests', './infra']
+ */
+def checkoutMultiple(List<Map> repositories) {
+    if (!repositories) {
+        error 'At least one repository must be provided for checkoutMultiple.'
+    }
+
+    def targetPaths = []
+
+    repositories.each { repoConfig ->
+        def repository = repoConfig.repository
+        def branch = repoConfig.branch ?: 'main'
+        def target = repoConfig.target
+
+        if (!(repository && target)) {
+            error "Each repository entry must include 'repository' (URL) and 'target' (directory). Got: ${repoConfig}"
+        }
+
+        steps.echo "Cloning ${repository} (${branch}) into ${target}"
+
+        try {
+            steps.checkout([
+                $class: 'GitSCM',
+                branches: [[name: "*/${branch}"]],
+                extensions: scm.extensions + [
+                    [$class: 'CleanBeforeCheckout'],
+                    [$class: 'RelativeTargetDirectory', relativeTargetDir: target]
+                ],
+                userRemoteConfigs: [[url: repository]]
+            ])
+        } catch (e) {
+            error "Error checking out [${repository}/${branch}] into ${target}: ${e.message}"
+        }
+
+        targetPaths << "./${target}"
+    }
+
+    return targetPaths
+}

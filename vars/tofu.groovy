@@ -355,3 +355,49 @@ def getOutputs(Map config) {
         return outputJson
     }
 }
+
+/**
+ * Tear down OpenTofu-managed infrastructure: select workspace, destroy
+ * resources, then delete the workspace.
+ *
+ * This is a convenience composition of selectWorkspace() → destroy() →
+ * deleteWorkspace() that captures the standard teardown sequence used
+ * across multiple pipeline types.
+ *
+ * Failures in workspace deletion are non-blocking (logged as warnings)
+ * to avoid blocking pipeline cleanup stages. Failures in destroy are fatal.
+ *
+ * Parameters:
+ *   dir     (String, required) - Tofu configuration directory.
+ *   name    (String, required) - Workspace name to tear down.
+ *   varFile (String, optional) - Path to a .tfvars file (-var-file) for destroy.
+ *
+ * Example:
+ *   tofu.teardownInfrastructure(
+ *       dir:     'infra/aws',
+ *       name:    workspaceName,
+ *       varFile: 'terraform.tfvars'
+ *   )
+ */
+def teardownInfrastructure(Map config) {
+    if (!(config.dir && config.name)) {
+        error 'Directory and workspace name must be provided for teardown.'
+    }
+
+    steps.echo "Tearing down infrastructure in workspace: ${config.name}"
+
+    // 1. Select the workspace
+    selectWorkspace(dir: config.dir, name: config.name)
+
+    // 2. Destroy the infrastructure (fatal on failure)
+    def destroyConfig = [dir: config.dir, autoApprove: true]
+    if (config.varFile) {
+        destroyConfig.varFile = config.varFile
+    }
+    destroy(destroyConfig)
+
+    // 3. Delete the workspace (non-blocking on failure)
+    deleteWorkspace(dir: config.dir, name: config.name)
+
+    steps.echo "Infrastructure teardown complete for workspace: ${config.name}"
+}
