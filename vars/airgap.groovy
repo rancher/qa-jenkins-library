@@ -170,13 +170,20 @@ def configureAnsible(Map config) {
         )
     }
 
-    // Inject SSH key path if not already present
+    // Inject SSH key path if not already present.
+    // ssh_private_key_file uses an absolute /root/.ssh path because it is used as
+    // the `src` of the ssh_setup role's copy module (which requires an absolute path)
+    // and by the inventory ProxyCommand — both run on the control machine where the
+    // key is mounted at /root/.ssh.
+    // ansible_ssh_private_key_file uses a tilde-relative path so that ssh/scp expand
+    // `~` to the correct home directory on each host: /root on the control machine
+    // and ~<ansible_user> (e.g. /home/ubuntu) on delegated bastion hosts.
     def sshKeyPath = "/root/.ssh/${config.sshKey.name}"
     if (!processedContent.contains('ssh_private_key_file:')) {
         processedContent += "\nssh_private_key_file: ${sshKeyPath}"
     }
     if (!processedContent.contains('ansible_ssh_private_key_file:')) {
-        processedContent += "\nansible_ssh_private_key_file: ${sshKeyPath}"
+        processedContent += "\nansible_ssh_private_key_file: ~/.ssh/${config.sshKey.name}"
     }
 
     ansible.writeInventoryVars(
