@@ -13,7 +13,7 @@ dependencyLocking {
 }
 
 dependencies {
-    implementation 'org.codehaus.groovy:groovy-all:3.0.24'
+    implementation 'org.codehaus.groovy:groovy-all:3.0.25'
 
     testImplementation 'org.spockframework:spock-core:2.3-groovy-3.0'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.11.4'
