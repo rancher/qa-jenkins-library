@@ -57,6 +57,18 @@
       "extends": [
         "github>rancher/renovate-config//rancher-2.11#release"
       ]
+    },
+    {
+      "description": "Disable automerge for regular patch and minor updates",
+      "matchJsonata": ["$not($exists(vulnerabilityFixVersion) or $exists(isVulnerabilityAlert))"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": false
+    },
+    {
+      "description": "Disable automerge for security patch and minor updates",
+      "matchJsonata": ["$exists(vulnerabilityFixVersion) or $exists(isVulnerabilityAlert)"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": false
     }
   ]
 }
