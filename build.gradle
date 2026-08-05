@@ -15,7 +15,7 @@ dependencyLocking {
 dependencies {
     implementation 'org.codehaus.groovy:groovy-all:3.0.25'
 
-    testImplementation 'org.spockframework:spock-core:2.3-groovy-3.0'
+    testImplementation 'org.spockframework:spock-core:2.4-groovy-5.0'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.11.4'
     testImplementation 'com.lesfurets:jenkins-pipeline-unit:1.22'
     testImplementation 'org.slf4j:slf4j-simple:2.0.18'
