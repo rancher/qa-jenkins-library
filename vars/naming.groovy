@@ -13,6 +13,7 @@
  *   def names    = naming.generateNames()
  *   def wsName   = naming.generateWorkspaceName(prefix: 'rancher_airgap')
  *   def keyNames = naming.generateSshKeyNames(keyType: 'pem', keyName: 'aws_key')
+ *   def host     = naming.extractRancherHost(config: cattleConfigYaml)
  */
 
 /**
@@ -326,4 +327,31 @@ def validateName(Map params) {
     }
 
     return true
+}
+
+/**
+ * Extract the Rancher hostname (rancher.host) from a cattle-config YAML string.
+ *
+ * Used so downstream naming (build display name, Qase test run name) doesn't
+ * need a separate HOSTNAME_PREFIX parameter passed in from the orchestrator.
+ *
+ * Parameters:
+ *   config (String, required) - Cattle-config YAML content containing a
+ *                                'host: <value>' entry.
+ *
+ * Returns the extracted hostname String, or '' if not found or config is blank.
+ *
+ * Example:
+ *   def host = naming.extractRancherHost(config: cattleConfigYaml)
+ *   // → 'my-rancher.example.com'
+ */
+def extractRancherHost(Map params) {
+    def config = params.config
+
+    if (!config?.trim()) {
+        return ''
+    }
+
+    def matcher = config =~ /(?m)^\s*host:\s*(\S+)/
+    return matcher ? matcher[0][1] : ''
 }
