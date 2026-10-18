@@ -15,7 +15,7 @@ dependencyLocking {
 dependencies {
     implementation 'org.codehaus.groovy:groovy-all:3.0.25'
 
-    testImplementation('org.spockframework:spock-core:2.5-groovy-6.0') {
+    testImplementation('org.spockframework:spock-core:2.4-groovy-3.0') {
         exclude group: 'org.apache.groovy'
     }
     testImplementation 'org.junit.jupiter:junit-jupiter-api:6.1.3'

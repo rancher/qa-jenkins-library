@@ -69,6 +69,11 @@
       "matchJsonata": ["$exists(vulnerabilityFixVersion) or $exists(isVulnerabilityAlert)"],
       "matchUpdateTypes": ["patch", "minor"],
       "automerge": false
+    },
+    {
+      "description": "Keep Spock compatible with the Groovy 3 test runtime",
+      "matchPackageNames": ["org.spockframework:spock-core"],
+      "allowedVersions": "/-groovy-3\\.0$/"
     }
   ]
 }
