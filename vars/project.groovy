@@ -137,3 +137,56 @@ def checkoutMultiple(List<Map> repositories) {
 
     return targetPaths
 }
+
+/**
+ * Check out multiple repositories without inheriting extensions from the
+ * Pipeline's SCM. Cleanup is scoped to each target directory, so one checkout
+ * cannot remove another repository from the workspace.
+ *
+ * Parameters:
+ *   repositories (List<Map>, required) - List of repository configuration maps, each with:
+ *   repository (String,  required) - Full HTTPS or SSH URL of the Git repository.
+ *   branch     (String,  optional) - Branch name to check out. Defaults to 'main'.
+ *   target     (String,  required) - Relative subdirectory within the workspace
+ *
+ * Returns a List of target directory paths (e.g. ['./tests', './infra']).
+ *
+ * Example:
+ *   def dirs = project.checkoutMultipleIsolated([
+ *       [repository: 'https://github.com/example/repo.git', branch: 'main', target: 'repo']
+ *   ])
+ * // dirs → ['./repo']
+ */
+def checkoutMultipleIsolated(List<Map> repositories) {
+    if (!repositories) {
+        error 'At least one repository must be provided for checkoutMultipleIsolated.'
+    }
+
+    def targetPaths = []
+    repositories.each { repoConfig ->
+        def repository = repoConfig.repository
+        def branch = repoConfig.branch ?: 'main'
+        def target = repoConfig.target
+
+        if (!(repository && target)) {
+            error "Each repository entry must include 'repository' (URL) and 'target' (directory). Got: ${repoConfig}"
+        }
+        if (target == '.' || target.startsWith('/') || target.tokenize('/').contains('..')) {
+            error "Repository target must be a workspace-relative subdirectory. Got: ${target}"
+        }
+
+        steps.echo "Cloning ${repository} (${branch}) into ${target}"
+        steps.dir(target) {
+            steps.deleteDir()
+            steps.checkout([
+                $class: 'GitSCM',
+                branches: [[name: "*/${branch}"]],
+                extensions: [[$class: 'CleanCheckout']],
+                userRemoteConfigs: [[url: repository]]
+            ])
+        }
+        targetPaths << "./${target}"
+    }
+
+    return targetPaths
+}
